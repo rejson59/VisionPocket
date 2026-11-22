@@ -2049,15 +2049,21 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     @Override public void onRecenter(float deltaYaw) {
         gpYaw = 0f;
         gpPitch = 0f;
-        float c = (float) Math.cos(deltaYaw), s = (float) Math.sin(deltaYaw);
+        // HeadTracker rotates the VIEW by R(+deltaYaw) (premultiplied into the
+        // device->gl rotation). World objects must follow with the SAME world
+        // rotation. Panel.rotateBy(d) applies R(-d), so pass -deltaYaw — the
+        // old sign sent the whole desktop behind the user's head on every
+        // recenter (startup auto-recenter included).
+        float d = -deltaYaw;
+        float c = (float) Math.cos(d), s = (float) Math.sin(d);
         float nx = ptxCx * c - ptxCz * s;
         float nz = ptxCx * s + ptxCz * c;
         ptxCx = nx;
         ptxCz = nz;
-        ptxYaw -= deltaYaw;
-        dock.rotateBy(deltaYaw);
-        wm.onRecenter(deltaYaw);
-        if (gameWin != null) gameWin.rotateOverlay(deltaYaw);
+        ptxYaw -= d;
+        dock.rotateBy(d);
+        wm.onRecenter(d);
+        if (gameWin != null) gameWin.rotateOverlay(d);
         setMsg(activity.getString(R.string.status_recentered), 2000);
     }
 }
