@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VisionPocket</string>
+    <string name="onboarding_title">VisionPocket</string>
+    <string name="onboarding_subtitle">Mixed reality in your pocket</string>
+    <string name="onboarding_desc">Insert your phone into a cardboard or plastic headset, then tap START. The camera view becomes your passthrough world and floating panels appear in front of you — look at a panel and tap anywhere to click.</string>
+    <string name="btn_start_vr">START VR</string>
+    <string name="btn_no_camera">Start without camera</string>
+    <string name="onboarding_note">Camera permission is used only for the passthrough background. Nothing is recorded or uploaded.</string>
+
+    <string name="home_title">VisionPocket</string>
+    <string name="home_subtitle">MR home · gaze &amp; tap</string>
+    <string name="home_btn_cinema">🎬  Cinema</string>
+    <string name="home_btn_settings">⚙️  Settings</string>
+    <string name="home_btn_passthrough">👁  Passthrough: %1$s</string>
+    <string name="home_btn_recenter">🔄  Recenter</string>
+    <string name="home_hint">Look at a button and tap the screen to click it</string>
+
+    <string name="common_on">ON</string>
+    <string name="common_off">OFF</string>
+    <string name="common_back">⬅  Back</string>
+    <string name="common_recenter">🔄  Recenter</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_ipd">Eye distance (IPD)</string>
+    <string name="settings_distortion">Lens distortion</string>
+    <string name="settings_resolution">Eye resolution</string>
+    <string name="settings_passthrough">Camera passthrough</string>
+    <string name="settings_rotate">Passthrough rotation</string>
+    <string name="settings_zoom">Passthrough zoom</string>
+    <string name="res_low">Low</string>
+    <string name="res_medium">Med</string>
+    <string name="res_high">High</string>
+
+    <string name="cinema_pick_video">📂  Pick a video</string>
+    <string name="cinema_hint_title">Virtual cinema</string>
+    <string name="cinema_hint_desc">Pick a video from your phone and watch it on a giant screen.</string>
+    <string name="cinema_btn_play">▶</string>
+    <string name="cinema_btn_pause">⏸</string>
+    <string name="cinema_btn_rew">⏪ 30s</string>
+    <string name="cinema_btn_ff">⏩ 30s</string>
+    <string name="cinema_btn_exit">⏏</string>
+    <string name="cinema_loading">Loading video…</string>
+    <string name="cinema_error">Could not play this video</string>
+    <string name="cinema_ended">End of video</string>
+
+    <string name="status_recentered">Recentered</string>
+    <string name="status_no_gyro">No gyroscope — head tracking limited</string>
+    <string name="err_no_camera">Camera unavailable — passthrough disabled</string>
+</resources>
