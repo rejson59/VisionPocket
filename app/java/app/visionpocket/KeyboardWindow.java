@@ -4,7 +4,9 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
 
-/** 3D QWERTY input dialog window (used for notes, URLs, any text field). */
+import java.util.Locale;
+
+/** 3D QWERTY input dialog window (notes, URLs, any text field) with shift key. */
 public class KeyboardWindow implements WindowContent {
 
     public interface Callback { void onOk(String text); void onCancel(); }
@@ -15,12 +17,13 @@ public class KeyboardWindow implements WindowContent {
     private final VpWindows.WmHost host;
     private final Callback cb;
     private StringBuilder text;
-    private final boolean maskTitle;
+    private boolean shift = false;
 
     private final Paint pBg = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pField = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pBtn = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pBtnHover = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pBtnActive = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pText = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pKey = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -33,12 +36,11 @@ public class KeyboardWindow implements WindowContent {
     };
 
     public KeyboardWindow(VpWindows wm, VpWindows.WmHost host, String title,
-                          String initial, boolean maskTitle, Callback cb) {
+                          String initial, Callback cb) {
         this.wm = wm;
         this.host = host;
         this.cb = cb;
         this.text = new StringBuilder(initial == null ? "" : initial);
-        this.maskTitle = maskTitle;
         window = new VpWindows.Window("kb", title);
         chrome = new Panel(0, 0, 0, 0, 1.7f, 1.34f, 800f);
         window.addPart(chrome, 0, 0, 0);
@@ -47,8 +49,6 @@ public class KeyboardWindow implements WindowContent {
         chrome.click = b -> onClick(b.id);
 
         int s = VpWindows.STRIP_PX;
-        // input field display
-        // key rows: 4 letter rows + bottom action row
         float keyW = 116f, keyH = 96f, gapX = 10f, gapY = 10f;
         for (int r = 0; r < ROWS.length; r++) {
             String row = ROWS[r];
@@ -56,12 +56,14 @@ public class KeyboardWindow implements WindowContent {
             float rowW = n * keyW + (n - 1) * gapX;
             float x0 = (chrome.pw - rowW) / 2f;
             float y = 130 + r * (keyH + gapY) + s;
+            if (r == 3) {
+                chrome.add("shift", x0 - keyW - gapX, y, x0 - gapX, y + keyH);
+            }
             for (int i = 0; i < n; i++) {
                 chrome.add("k_" + row.charAt(i), x0 + i * (keyW + gapX), y,
                         x0 + i * (keyW + gapX) + keyW, y + keyH);
             }
         }
-        // bottom row: url extras, space, backspace, cancel, ok
         int y5 = 130 + 4 * (int) (keyH + gapY) + s;
         float x = 40;
         chrome.add("k_:", x, y5, x + 90, y5 + keyH); x += 100;
@@ -77,6 +79,7 @@ public class KeyboardWindow implements WindowContent {
         pField.setColor(0xFF171B2A);
         pBtn.setColor(0xFF232838);
         pBtnHover.setColor(0xFF3D4964);
+        pBtnActive.setColor(0xFF31518C);
         pBorder.setStyle(Paint.Style.STROKE);
         pBorder.setStrokeWidth(2.5f);
         pBorder.setColor(0xFF39415A);
@@ -98,28 +101,27 @@ public class KeyboardWindow implements WindowContent {
         c.drawRoundRect(40, 14, p.pw - 40, 108, 20, 20, pField);
         c.drawRoundRect(40, 14, p.pw - 40, 108, 20, 20, pBorder);
         String shown = text.toString();
-        if (maskTitle && shown.length() > 42) shown = "…" + shown.substring(shown.length() - 42);
+        if (shown.length() > 42) shown = "…" + shown.substring(shown.length() - 42);
         pText.setTextAlign(Paint.Align.LEFT);
-        c.drawText(shown.isEmpty() ? host.activity().getString(R.string.url_hint) : shown,
-                64f, 78f, shown.isEmpty() ? pKey : pText);
-        // cursor blink
-        if (SystemClock365() % 1000 < 500) {
+        c.drawText(shown.isEmpty() ? "…" : shown, 64f, 78f, shown.isEmpty() ? pKey : pText);
+        if (android.os.SystemClock.uptimeMillis() % 1000 < 500) {
             float tw = pText.measureText(shown);
             c.drawRoundRect(64 + tw + 6, 34, 64 + tw + 12, 92, 3, 3, pKey);
         }
 
         for (Panel.Button b : p.buttons) {
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
-            c.drawRoundRect(r, 16, 16, b.hover ? pBtnHover : pBtn);
-            pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
+            boolean active = "shift".equals(b.id) && shift;
+            c.drawRoundRect(r, 16, 16, b.hover ? pBtnHover : (active ? pBtnActive : pBtn));
+            pBorder.setColor(b.hover ? 0xFF5B8DEF : (active ? 0xFF5B8DEF : 0xFF39415A));
             c.drawRoundRect(r, 16, 16, pBorder);
             String label = keyLabel(b.id);
+            if (("shift".equals(b.id) || label.length() == 1) && shift
+                    && Character.isLetter(label.charAt(0))) {
+                label = label.toUpperCase(Locale.US);
+            }
             c.drawText(label, r.centerX(), r.centerY() - (pKey.ascent() + pKey.descent()) / 2f, pKey);
         }
-    }
-
-    private long SystemClock365() {
-        return android.os.SystemClock.uptimeMillis();
     }
 
     private String keyLabel(String id) {
@@ -127,6 +129,7 @@ public class KeyboardWindow implements WindowContent {
         switch (id) {
             case "space": return "␣";
             case "bs": return "⌫";
+            case "shift": return "⇧";
             case "ok": return host.activity().getString(R.string.kb_ok);
             case "cancel": return host.activity().getString(R.string.kb_cancel);
             default: return "";
@@ -137,11 +140,18 @@ public class KeyboardWindow implements WindowContent {
 
     @Override public void onClick(String id) {
         if (id.startsWith("k_") && id.length() > 2) {
-            text.append(id.substring(2));
+            String ch = id.substring(2);
+            if (shift && ch.length() == 1 && Character.isLetter(ch.charAt(0))) {
+                ch = ch.toUpperCase(Locale.US);
+                shift = false;
+            }
+            text.append(ch);
         } else if ("space".equals(id)) {
             text.append(' ');
         } else if ("bs".equals(id)) {
             if (text.length() > 0) text.setLength(text.length() - 1);
+        } else if ("shift".equals(id)) {
+            shift = !shift;
         } else if ("ok".equals(id)) {
             String t = text.toString();
             wm.close(window);

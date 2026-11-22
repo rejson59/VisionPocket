@@ -6,7 +6,7 @@ import android.graphics.RectF;
 
 import java.util.Locale;
 
-/** Settings window: IPD, distortion, resolution, passthrough options. */
+/** Settings window: IPD, distortion, resolution, passthrough, perf, haptics. */
 public class SettingsWindow implements WindowContent {
 
     public final VpWindows.Window window;
@@ -28,30 +28,37 @@ public class SettingsWindow implements WindowContent {
         this.wm = wm;
         this.host = host;
         window = new VpWindows.Window("settings", host.activity().getString(R.string.win_settings));
-        chrome = new Panel(0, 0, 0, 0, 1.5f, 1.18f, 800f);
+        chrome = new Panel(0, 0, 0, 0, 1.5f, 1.42f, 800f);
         window.addPart(chrome, 0, 0, 0);
         window.attachChrome(chrome);
         window.content = this;
 
         int s = VpWindows.STRIP_PX;
-        for (int i = 0; i < 7; i++) {
-            int y = 10 + i * 104;
+        for (int i = 0; i < 9; i++) {
+            int y = 8 + i * 98;
             switch (i) {
-                case 0: chrome.add("ipd_m", 1010, y + 6 + s, 1180, y + 100 + s); chrome.add("ipd_p", 1200, y + 6 + s, 1370, y + 100 + s); break;
-                case 1: chrome.add("dist_m", 1010, y + 6 + s, 1180, y + 100 + s); chrome.add("dist_p", 1200, y + 6 + s, 1370, y + 100 + s); break;
+                case 0: chrome.add("ipd_m", 1010, y + 4 + s, 1180, y + 90 + s); chrome.add("ipd_p", 1200, y + 4 + s, 1370, y + 90 + s); break;
+                case 1: chrome.add("dist_m", 1010, y + 4 + s, 1180, y + 90 + s); chrome.add("dist_p", 1200, y + 4 + s, 1370, y + 90 + s); break;
                 case 2:
-                    chrome.add("res0", 700, y + 6 + s, 890, y + 100 + s);
-                    chrome.add("res1", 910, y + 6 + s, 1100, y + 100 + s);
-                    chrome.add("res2", 1120, y + 6 + s, 1310, y + 100 + s);
+                    chrome.add("res0", 700, y + 4 + s, 890, y + 90 + s);
+                    chrome.add("res1", 910, y + 4 + s, 1100, y + 90 + s);
+                    chrome.add("res2", 1120, y + 4 + s, 1310, y + 90 + s);
                     break;
-                case 3: chrome.add("pt", 700, y + 6 + s, 1370, y + 100 + s); break;
-                case 4: chrome.add("rot", 700, y + 6 + s, 1370, y + 100 + s); break;
-                case 5: chrome.add("zoom_m", 1010, y + 6 + s, 1180, y + 100 + s); chrome.add("zoom_p", 1200, y + 6 + s, 1370, y + 100 + s); break;
-                case 6: chrome.add("selfie", 700, y + 6 + s, 1370, y + 100 + s); break;
+                case 3: chrome.add("pt", 700, y + 4 + s, 1370, y + 90 + s); break;
+                case 4: chrome.add("rot", 700, y + 4 + s, 1370, y + 90 + s); break;
+                case 5: chrome.add("zoom_m", 1010, y + 4 + s, 1180, y + 90 + s); chrome.add("zoom_p", 1200, y + 4 + s, 1370, y + 90 + s); break;
+                case 6: chrome.add("selfie", 700, y + 4 + s, 1370, y + 90 + s); break;
+                case 7:
+                    chrome.add("perf0", 700, y + 4 + s, 890, y + 90 + s);
+                    chrome.add("perf1", 910, y + 4 + s, 1100, y + 90 + s);
+                    chrome.add("perf2", 1120, y + 4 + s, 1310, y + 90 + s);
+                    break;
+                case 8: chrome.add("haptics", 700, y + 4 + s, 1370, y + 90 + s); break;
             }
         }
-        chrome.add("do_recenter", 620, 750 + s, 1370, 850 + s);
-        chrome.add("shot", 40, 750 + s, 580, 850 + s);
+        chrome.add("shot", 40, 928 + s, 440, 1024 + s);
+        chrome.add("calib", 480, 928 + s, 880, 1024 + s);
+        chrome.add("do_recenter", 920, 928 + s, 1370, 1024 + s);
         chrome.click = b -> onClick(b.id);
 
         pBg.setColor(0xFF0E101A);
@@ -63,13 +70,13 @@ public class SettingsWindow implements WindowContent {
         pBorder.setStrokeWidth(3f);
         pBorder.setColor(0xFF39415A);
         pLabel.setColor(0xFFC9D1E4);
-        pLabel.setTextSize(44f);
+        pLabel.setTextSize(42f);
         pLabel.setTextAlign(Paint.Align.LEFT);
         pValue.setColor(0xFFE8ECF5);
-        pValue.setTextSize(50f);
+        pValue.setTextSize(48f);
         pValue.setTextAlign(Paint.Align.CENTER);
         pValue.setFakeBoldText(true);
-        pSym.setTextSize(56f);
+        pSym.setTextSize(50f);
         pSym.setTextAlign(Paint.Align.CENTER);
 
         wm.placeNew(window);
@@ -87,44 +94,40 @@ public class SettingsWindow implements WindowContent {
                 host.activity().getString(R.string.settings_passthrough),
                 host.activity().getString(R.string.settings_rotate),
                 host.activity().getString(R.string.settings_zoom),
-                host.activity().getString(R.string.settings_selfie)
+                host.activity().getString(R.string.settings_selfie),
+                host.activity().getString(R.string.settings_perf),
+                host.activity().getString(R.string.settings_haptics)
         };
         String[] values = {
                 st.ipd() + " mm",
                 st.distortionPct() + " %",
-                null,
-                null,
-                null,
+                null, null, null,
                 String.format(Locale.US, "%.1f", st.zoom()),
-                null
+                null, null, null
         };
-        for (int i = 0; i < 7; i++) {
-            int y = 10 + i * 104;
-            RectF row = new RectF(40, y, 1400, y + 94);
-            c.drawRoundRect(row, 24, 24, pRow);
-            c.drawText(labels[i], 70, y + 60, pLabel);
-            if (values[i] != null) c.drawText(values[i], 920, y + 62, pValue);
+        for (int i = 0; i < 9; i++) {
+            int y = 8 + i * 98;
+            RectF row = new RectF(40, y, 1400, y + 90);
+            c.drawRoundRect(row, 22, 22, pRow);
+            c.drawText(labels[i], 70, y + 58, pLabel);
+            if (values[i] != null) c.drawText(values[i], 920, y + 60, pValue);
         }
 
         for (Panel.Button b : p.buttons) {
-            if ("do_recenter".equals(b.id)) continue;
-            int rowTop = 10, rowBot = 104;
-            for (int i = 0; i < 7; i++) {
-                int y = 10 + i * 104;
-                if (b.rect.top - s >= y && b.rect.bottom - s <= y + 100) { rowTop = y; rowBot = y + 94; break; }
+            if ("shot".equals(b.id) || "calib".equals(b.id) || "do_recenter".equals(b.id)) continue;
+            int rowTop = 8, rowBot = 98;
+            for (int i = 0; i < 9; i++) {
+                int y = 8 + i * 98;
+                if (b.rect.top - s >= y && b.rect.bottom - s <= y + 94) { rowTop = y; rowBot = y + 90; break; }
             }
-            boolean inRow = b.rect.top - s >= rowTop && b.rect.bottom - s <= rowBot;
-            if (!inRow) continue;
+            if (!(b.rect.top - s >= rowTop && b.rect.bottom - s <= rowBot)) continue;
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             Paint fill = b.hover ? pBtnHover : (isActive(b.id, st) ? pBtnActive : pBtn);
-            c.drawRoundRect(r, 20, 20, fill);
+            c.drawRoundRect(r, 18, 18, fill);
             pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
-            c.drawRoundRect(r, 20, 20, pBorder);
+            c.drawRoundRect(r, 18, 18, pBorder);
             String text = buttonLabel(b.id, st);
-            if ("selfie".equals(b.id)) {
-                text = host.activity().getString(st.frontCam() ? R.string.common_on : R.string.common_off);
-            }
-            if (text.length() <= 2 && ("−".equals(text) || "+".equals(text))) {
+            if ("−".equals(text) || "+".equals(text)) {
                 c.drawText(text, r.centerX(), r.centerY() - (pSym.ascent() + pSym.descent()) / 2f, pSym);
             } else {
                 HomeSceneUtil.drawCentered(c, text, r, pValue);
@@ -132,14 +135,15 @@ public class SettingsWindow implements WindowContent {
         }
 
         for (Panel.Button b : p.buttons) {
-            if (!"do_recenter".equals(b.id) && !"shot".equals(b.id)) continue;
+            if (!"shot".equals(b.id) && !"calib".equals(b.id) && !"do_recenter".equals(b.id)) continue;
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
-            c.drawRoundRect(r, 22, 22, b.hover ? pBtnHover : pBtn);
+            c.drawRoundRect(r, 20, 20, b.hover ? pBtnHover : pBtn);
             pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
-            c.drawRoundRect(r, 22, 22, pBorder);
-            String t = "shot".equals(b.id)
-                    ? host.activity().getString(R.string.settings_shot)
-                    : host.activity().getString(R.string.common_recenter);
+            c.drawRoundRect(r, 20, 20, pBorder);
+            String t;
+            if ("shot".equals(b.id)) t = host.activity().getString(R.string.settings_shot);
+            else if ("calib".equals(b.id)) t = "🎯  " + host.activity().getString(R.string.calib_open);
+            else t = host.activity().getString(R.string.common_recenter);
             HomeSceneUtil.drawCentered(c, t, r, pValue);
         }
     }
@@ -150,6 +154,10 @@ public class SettingsWindow implements WindowContent {
             case "res1": return st.resIdx() == 1;
             case "res2": return st.resIdx() == 2;
             case "selfie": return st.frontCam();
+            case "perf0": return st.perfMode() == 0;
+            case "perf1": return st.perfMode() == 1;
+            case "perf2": return st.perfMode() == 2;
+            case "haptics": return st.haptics();
             default: return false;
         }
     }
@@ -163,6 +171,11 @@ public class SettingsWindow implements WindowContent {
             case "res2": return host.activity().getString(R.string.res_high);
             case "pt": return host.activity().getString(st.passthrough() ? R.string.common_on : R.string.common_off);
             case "rot": return st.rotDeg() + "°";
+            case "selfie": return host.activity().getString(st.frontCam() ? R.string.common_on : R.string.common_off);
+            case "perf0": return "🔋";
+            case "perf1": return "⚖";
+            case "perf2": return "⚡";
+            case "haptics": return host.activity().getString(st.haptics() ? R.string.common_on : R.string.common_off);
             default: return "";
         }
     }
@@ -188,8 +201,13 @@ public class SettingsWindow implements WindowContent {
                 st.setFrontCam(!st.frontCam());
                 host.applyFrontCam();
                 break;
+            case "perf0": case "perf1": case "perf2":
+                st.setPerfMode(Integer.parseInt(id.substring(4)));
+                break;
+            case "haptics": st.setHaptics(!st.haptics()); break;
             case "do_recenter": host.recenterView(); break;
             case "shot": host.vrScreenshot(); break;
+            case "calib": host.openCalibration(); break;
         }
         chrome.dirty = true;
     }

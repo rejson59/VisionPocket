@@ -59,7 +59,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     // --- programs ---
     private int pPanel, pCam, pDist, pColor, pEnvSpace, pEnvHorizon;
     private int uPanelMVP, aPanelPos, aPanelUV, uPanelTex, uPanelAlpha, uPanelMode;
-    private int uCamMVP, aCamPos, aCamUV, uCamTex, uCamAngle, uCamZoom, uCamOverscan, uCamMode;
+    private int uCamMVP, aCamPos, aCamUV, uCamTex, uCamAngle, uCamZoom, uCamOverscan, uCamMode, uCamSide;
     private int aDistPos, uDistScene, uDistEyeCenter, uDistHalf, uDistAspect, uDistK1, uDistK2;
     private int uColorMVP, aColorPos, uColorColor;
     private int uSpaceMVP, aSpacePos, aSpaceUV, uSpaceTime;
@@ -199,6 +199,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             "uniform float uZoom;\n" +
             "uniform float uOverscan;\n" +
             "uniform float uMode;\n" +
+            "uniform float uSide;\n" +
             "varying vec2 vUV;\n" +
             MODE_GLSL +
             "void main(){\n" +
@@ -207,7 +208,9 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             "  float sn = sin(uAngle);\n" +
             "  c = vec2(c.x*cs - c.y*sn, c.x*sn + c.y*cs);\n" +
             "  c = c / (uZoom * uOverscan);\n" +
-            "  gl_FragColor = texture2D(uCam, applyMode(vec2(0.5) + c, uMode));\n" +
+            "  vec2 suv = vec2(0.5) + c;\n" +
+            "  if (abs(uSide) > 0.5) { suv.x = (suv.x + (uSide < 0.0 ? 0.0 : 1.0)) * 0.5; }\n" +
+            "  gl_FragColor = texture2D(uCam, applyMode(suv, uMode));\n" +
             "}\n";
 
     private static final String FS_SPACE =
@@ -323,8 +326,11 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     // ================= lifecycle =================
 
+    private boolean glFail = false;
+
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        try {
         GLES20.glDisable(GLES20.GL_CULL_FACE);
         GLES20.glClearColor(0f, 0f, 0f, 1f);
 
@@ -345,6 +351,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         uCamZoom = GLES20.glGetUniformLocation(pCam, "uZoom");
         uCamOverscan = GLES20.glGetUniformLocation(pCam, "uOverscan");
         uCamMode = GLES20.glGetUniformLocation(pCam, "uMode");
+        uCamSide = GLES20.glGetUniformLocation(pCam, "uSide");
 
         pEnvSpace = GlUtil.createProgram(VS_TEX, FS_SPACE);
         uSpaceMVP = GLES20.glGetUniformLocation(pEnvSpace, "uMVP");
@@ -397,6 +404,9 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         }
 
         if (cameraAllowed) camera.start();
+        } catch (Throwable t) {
+            glFail = true;
+        }
     }
 
     @Override
@@ -417,12 +427,20 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         applyResolution();
     }
 
+    private int frameCount = 0;
+
     @Override
     public void onDrawFrame(GL10 gl) {
+        if (glFail) {
+            GLES20.glClearColor(0f, 0f, 0f, 1f);
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+            return;
+        }
         Runnable r;
         while ((r = glQueue.poll()) != null) {
             try { r.run(); } catch (Exception ignored) {}
         }
+        if (++frameCount % 120 == 0) saveSession();
 
         long now = System.nanoTime();
         float dt = 0.016f;
@@ -537,11 +555,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                     Panel p = pt.panel;
                     if (!p.visible) continue;
                     if (p.oes) {
+                        float side = p.sbsSide == 0 ? 0f : (eye == 0 ? -1f : 1f);
                         if (p.mesh != null) {
-                            drawOesMesh(p.oesTex, p, pv);
+                            drawOesMesh(p.oesTex, p, pv, side);
                         } else {
                             drawCamQuad(p.oesTex, p.cx, p.cy, p.cz, p.yaw, p.width, p.height,
-                                    0f, 1f, 1f, pv, 0f);
+                                    0f, 1f, 1f, pv, 0f, side);
                         }
                     } else {
                         p.renderIfNeeded();
@@ -611,11 +630,26 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     // ================= adaptive resolution =================
 
     private void adaptResolution(float dt) {
+        int pm = settings.perfMode();
+        if (pm == 2) { // performance: always full res
+            if (adaptIdx < ADAPT_STEPS.length - 1) {
+                adaptIdx = ADAPT_STEPS.length - 1;
+                applyResolution();
+            }
+            return;
+        }
+        int minIdx = pm == 0 ? 2 : 0;              // battery never goes below 75 %
+        int maxIdx = pm == 0 ? 2 : ADAPT_STEPS.length - 1;
+        if (adaptIdx < minIdx) {
+            adaptIdx = minIdx;
+            applyResolution();
+            return;
+        }
         if (runTime < 2.5f) return;
         if (fps < 52f) {
             lowTimer += dt;
             highTimer = 0f;
-            if (lowTimer > 1.5f && adaptIdx > 0) {
+            if (lowTimer > 1.5f && adaptIdx > minIdx) {
                 adaptIdx--;
                 applyResolution();
                 lowTimer = 0f;
@@ -625,7 +659,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         } else if (fps > 58f) {
             highTimer += dt;
             lowTimer = 0f;
-            if (highTimer > 5f && adaptIdx < ADAPT_STEPS.length - 1) {
+            if (highTimer > 5f && adaptIdx < maxIdx) {
                 adaptIdx++;
                 applyResolution();
                 highTimer = 0f;
@@ -723,16 +757,17 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     private void applyGamepadFrame(float dt) {
         if (!gpGrabbing) return;
-        float kx = grabKx / Math.max(0.001f, 1f / 60f) * dt;
+        // constant linear speed (m/s), frame-rate independent
+        float step = 1.15f * dt;
+        float dx = gpStickX * step;
+        float dy = -gpStickY * step;
+        float df = gpDepth * step;
+        float mx = hr[0] * dx + hu[0] * dy + hf[0] * df;
+        float my = hr[1] * dx + hu[1] * dy + hf[1] * df;
+        float mz = hr[2] * dx + hu[2] * dy + hf[2] * df;
         if (grabWin != null) {
-            float mx = hr[0] * gpStickX * kx * 46f + hf[0] * gpDepth * dt * 1.5f;
-            float my = hr[1] * (-gpStickY) * kx * 46f + hf[1] * gpDepth * dt * 1.5f;
-            float mz = hr[2] * gpStickX * kx * 46f + hu[1] * (-gpStickY) * kx * 46f + hf[2] * gpDepth * dt * 1.5f;
             grabWin.moveBy(mx, my, mz);
         } else if (grabPanel == dock) {
-            float mx = hr[0] * gpStickX * kx * 46f + hf[0] * gpDepth * dt * 1.5f;
-            float my = hr[1] * (-gpStickY) * kx * 46f + hf[1] * gpDepth * dt * 1.5f;
-            float mz = hr[2] * gpStickX * kx * 46f + hu[1] * (-gpStickY) * kx * 46f + hf[2] * gpDepth * dt * 1.5f;
             dock.cx += mx;
             dock.cy = Math.max(-1.3f, Math.min(0.7f, dock.cy + my));
             dock.cz = Math.max(-6f, Math.min(-0.5f, dock.cz + mz));
@@ -816,6 +851,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private void drawCamQuad(int tex, float cx, float cy, float cz, float yaw,
                              float w, float h, float angleDeg, float zoom, float overscan,
                              float[] pv, float mode) {
+        drawCamQuad(tex, cx, cy, cz, yaw, w, h, angleDeg, zoom, overscan, pv, mode, 0f);
+    }
+
+    private void drawCamQuad(int tex, float cx, float cy, float cz, float yaw,
+                             float w, float h, float angleDeg, float zoom, float overscan,
+                             float[] pv, float mode, float side) {
         Matrix.setIdentityM(tmpM2, 0);
         Matrix.translateM(tmpM2, 0, cx, cy, cz);
         if (yaw != 0f) Matrix.rotateM(tmpM2, 0, (float) Math.toDegrees(yaw), 0f, 1f, 0f);
@@ -832,6 +873,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glUniform1f(uCamZoom, zoom);
         GLES20.glUniform1f(uCamOverscan, overscan);
         GLES20.glUniform1f(uCamMode, mode);
+        GLES20.glUniform1f(uCamSide, side);
         GLES20.glEnableVertexAttribArray(aCamPos);
         GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
         GLES20.glEnableVertexAttribArray(aCamUV);
@@ -840,7 +882,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glEnable(GLES20.GL_BLEND);
     }
 
-    private void drawOesMesh(int tex, Panel p, float[] pv) {
+    private void drawOesMesh(int tex, Panel p, float[] pv, float side) {
         float sx = p.width / Math.max(0.01f, p.mesh.baseW);
         Matrix.setIdentityM(tmpM2, 0);
         Matrix.translateM(tmpM2, 0, p.cx, p.cy, p.cz);
@@ -858,6 +900,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glUniform1f(uCamZoom, 1f);
         GLES20.glUniform1f(uCamOverscan, 1f);
         GLES20.glUniform1f(uCamMode, 0f);
+        GLES20.glUniform1f(uCamSide, side);
         GLES20.glEnableVertexAttribArray(aCamPos);
         GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, p.mesh.pos);
         GLES20.glEnableVertexAttribArray(aCamUV);
@@ -893,6 +936,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             GLES20.glUniform1f(uCamZoom, 1f);
             GLES20.glUniform1f(uCamOverscan, 1f);
             GLES20.glUniform1f(uCamMode, projMode);
+            GLES20.glUniform1f(uCamSide, 0f);
             GLES20.glEnableVertexAttribArray(aCamPos);
             GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, panoMesh.pos);
             GLES20.glEnableVertexAttribArray(aCamUV);
@@ -1281,6 +1325,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 break;
             case "env": new EnvWindow(wm, this); break;
             case "settings": new SettingsWindow(wm, this); break;
+            case "calib": new CalibrationWindow(wm, this); break;
             case "start":
                 if (wm.find("start") == null) new StartWindow(wm, this);
                 break;
@@ -1291,9 +1336,69 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     public void onVrStarted() {
         glQueue.add(() -> {
+            loadSession();
             openWindow("start");
             setMsg(activity.getString(R.string.start_toast), 6000);
+            if (System.currentTimeMillis() - settings.lastCrash() < 60000) {
+                setMsg(activity.getString(R.string.err_recovered), 6000);
+            }
         });
+    }
+
+    /** Persists window placement + dock so the desktop survives app restarts. */
+    private void saveSession() {
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray();
+            for (VpWindows.Window w : wm.list) {
+                if ("start".equals(w.kind) || "kb".equals(w.kind) || "calib".equals(w.kind)) continue;
+                org.json.JSONObject o = new org.json.JSONObject();
+                o.put("k", w.kind);
+                o.put("x", (double) w.ax); o.put("y", (double) w.ay); o.put("z", (double) w.az);
+                o.put("a", (double) w.ayaw); o.put("s", (double) w.scale); o.put("m", w.minimized);
+                arr.put(o);
+            }
+            org.json.JSONObject root = new org.json.JSONObject();
+            root.put("w", arr);
+            org.json.JSONObject d = new org.json.JSONObject();
+            d.put("x", (double) dock.cx); d.put("y", (double) dock.cy);
+            d.put("z", (double) dock.cz); d.put("a", (double) dock.yaw);
+            root.put("d", d);
+            settings.setSession(root.toString());
+        } catch (Exception ignored) {}
+    }
+
+    private void loadSession() {
+        try {
+            String str = settings.session();
+            if (str == null || str.isEmpty()) return;
+            org.json.JSONObject root = new org.json.JSONObject(str);
+            org.json.JSONArray arr = root.optJSONArray("w");
+            if (arr != null) {
+                for (int i = 0; i < arr.length(); i++) {
+                    org.json.JSONObject o = arr.getJSONObject(i);
+                    String k = o.optString("k");
+                    if (wm.find(k) != null) continue;
+                    openWindow(k);
+                    VpWindows.Window w = wm.find(k);
+                    if (w == null) continue;
+                    w.ax = (float) o.optDouble("x", 0);
+                    w.ay = (float) o.optDouble("y", 0.18);
+                    w.az = (float) o.optDouble("z", -2.3);
+                    w.ayaw = (float) o.optDouble("a", 0);
+                    w.applyScale((float) o.optDouble("s", 1));
+                    w.layout();
+                    wm.focus(w);
+                    if (o.optBoolean("m")) w.setMinimized(true);
+                }
+            }
+            org.json.JSONObject d = root.optJSONObject("d");
+            if (d != null) {
+                dock.cx = (float) d.optDouble("x", dock.cx);
+                dock.cy = (float) d.optDouble("y", dock.cy);
+                dock.cz = (float) d.optDouble("z", dock.cz);
+                dock.yaw = (float) d.optDouble("a", dock.yaw);
+            }
+        } catch (Exception ignored) {}
     }
 
     public boolean back() {
@@ -1497,7 +1602,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     @Override
     public void openStreamDialog() {
         new KeyboardWindow(wm, this,
-                activity.getString(R.string.kb_title_url), "https://", true,
+                activity.getString(R.string.kb_title_url), "https://",
                 new KeyboardWindow.Callback() {
                     @Override public void onOk(String t) {
                         CinemaWindow cw = null;
@@ -1513,6 +1618,13 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                     }
                     @Override public void onCancel() {}
                 });
+    }
+
+    @Override
+    public void openCalibration() {
+        glQueue.add(() -> {
+            if (wm.find("calib") == null) new CalibrationWindow(wm, this);
+        });
     }
 
     public void applyFrontCam() {
@@ -1647,6 +1759,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     // ================= HeadTracker.RecenterListener =================
 
     @Override public void onRecenter(float deltaYaw) {
+        gpYaw = 0f;
+        gpPitch = 0f;
         float c = (float) Math.cos(deltaYaw), s = (float) Math.sin(deltaYaw);
         float nx = ptxCx * c - ptxCz * s;
         float nz = ptxCx * s + ptxCz * c;

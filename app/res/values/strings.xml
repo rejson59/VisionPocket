@@ -100,4 +100,13 @@
     <string name="proj_name_equal">Equirect</string>
     <string name="proj_name_dome">Dome</string>
     <string name="proj_name_planet">Tiny planet</string>
+    <string name="cinema_buffering">Buffering…</string>
+    <string name="err_recovered">Recovered from an error — your setup is kept</string>
+    <string name="settings_perf">Performance profile</string>
+    <string name="settings_haptics">Click vibration</string>
+    <string name="win_calib">IPD calibration</string>
+    <string name="calib_open">Calibrate</string>
+    <string name="calib_hint1">Adjust IPD until the lines look sharp and single.</string>
+    <string name="calib_hint2">Settings → Calibrate anytime; IPD is remembered.</string>
+    <string name="calib_done">✓  Done</string>
 </resources>

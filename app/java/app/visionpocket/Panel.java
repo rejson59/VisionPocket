@@ -49,6 +49,9 @@ public class Panel {
     // optional curved geometry (replaces the flat quad when set)
     public Mesh mesh;
 
+    // side-by-side stereo: -1 = this panel shows the LEFT half, 1 = right half, 0 = full frame
+    public int sbsSide = 0;
+
     public final List<Button> buttons = new ArrayList<>();
     public DrawHook hook;
     public Click click;

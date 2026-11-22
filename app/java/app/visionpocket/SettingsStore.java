@@ -53,6 +53,22 @@ public class SettingsStore {
     public String note() { return prefs.getString("note", ""); }
     public void setNote(String s) { prefs.edit().putString("note", s == null ? "" : s).apply(); }
 
+    /** Performance profile: 0=battery, 1=balanced (adaptive), 2=performance. */
+    public int perfMode() { return prefs.getInt("perf", 1); }
+    public void setPerfMode(int v) { prefs.edit().putInt("perf", clamp(v, 0, 2)).apply(); }
+
+    /** Click haptics on/off. */
+    public boolean haptics() { return prefs.getBoolean("haptics", true); }
+    public void setHaptics(boolean b) { prefs.edit().putBoolean("haptics", b).apply(); }
+
+    /** Timestamp of the last crash (crash-guard). */
+    public long lastCrash() { return prefs.getLong("lastCrash", 0); }
+    public void setLastCrash(long ts) { prefs.edit().putLong("lastCrash", ts).apply(); }
+
+    /** Serialized window session (JSON) + dock placement. */
+    public String session() { return prefs.getString("session", ""); }
+    public void setSession(String s) { prefs.edit().putString("session", s == null ? "" : s).apply(); }
+
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
     private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
 }

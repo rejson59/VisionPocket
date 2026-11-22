@@ -21,9 +21,11 @@ public class CinemaWindow implements WindowContent {
     private MediaPlayer mp;
     private boolean prepared = false;
     private boolean error = false;
+    private boolean buffering = false;
     public boolean videoReady = false;
     private int pos = 0, dur = 0;
     private int tick = 0;
+    private float vol = 1f;
 
     private final Paint pBg = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pBtn = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -51,12 +53,14 @@ public class CinemaWindow implements WindowContent {
 
         // buttons in body coords + STRIP offset (hit-test uses full-canvas px)
         int s = VpWindows.STRIP_PX;
-        chrome.add("rew", 40, 30 + s, 250, 170 + s);
-        chrome.add("play", 270, 30 + s, 480, 170 + s);
-        chrome.add("ff", 500, 30 + s, 710, 170 + s);
-        chrome.add("pick", 730, 30 + s, 830, 170 + s);
-        chrome.add("url", 850, 30 + s, 950, 170 + s);
-        chrome.add("exit", 970, 30 + s, 1070, 170 + s);
+        chrome.add("voldown", 30, 30 + s, 130, 170 + s);
+        chrome.add("rew", 150, 30 + s, 250, 170 + s);
+        chrome.add("play", 270, 30 + s, 370, 170 + s);
+        chrome.add("ff", 390, 30 + s, 490, 170 + s);
+        chrome.add("volup", 510, 30 + s, 610, 170 + s);
+        chrome.add("pick", 630, 30 + s, 730, 170 + s);
+        chrome.add("url", 750, 30 + s, 850, 170 + s);
+        chrome.add("exit", 870, 30 + s, 970, 170 + s);
         chrome.click = b -> onClick(b.id);
         video.click = b -> {};
 
@@ -88,6 +92,9 @@ public class CinemaWindow implements WindowContent {
             c.drawRoundRect(30, 8, fx, 26, 9, 9, pBarFill);
         }
         boolean playing = mp != null && prepared && mp.isPlaying();
+        if (buffering) {
+            c.drawText(host.activity().getString(R.string.cinema_buffering), p.pw / 2f, 60f, pMsg);
+        }
         if (!videoReady && uri == null && !error) {
             c.drawText(host.activity().getString(R.string.cinema_hint_title), p.pw / 2f, 120f, pMsg);
         } else if (error) {
@@ -109,6 +116,8 @@ public class CinemaWindow implements WindowContent {
                 case "pick": label = "📂"; break;
                 case "url": label = "📡"; break;
                 case "exit": label = "⏏"; break;
+                case "voldown": label = "🔉"; break;
+                case "volup": label = "🔊"; break;
                 default: label = "";
             }
             HomeSceneUtil.drawCentered(c, label,
@@ -133,8 +142,11 @@ public class CinemaWindow implements WindowContent {
                 try {
                     int vw = p.getVideoWidth(), vh = p.getVideoHeight();
                     if (vw > 0 && vh > 0 && st != null) st.setDefaultBufferSize(vw, vh);
+                    boolean sbs = vw > vh * 2 + 8; // side-by-side 3D file
+                    video.sbsSide = sbs ? -1 : 0;
+                    float contentW = sbs ? vw / 2f : vw;
                     float hv = 1.69f;
-                    float hw = Math.max(0.9f, Math.min(3.4f, hv * vw / (float) vh));
+                    float hw = Math.max(0.9f, Math.min(3.4f, hv * contentW / (float) vh));
                     float offY = 0.38f / 2f + hv / 2f + 0.06f;
                     window.setPartGeometry(video, hw, hv, 0f, offY, 0f);
                     // curved Quest-style screen wrapping toward the viewer
@@ -145,8 +157,15 @@ public class CinemaWindow implements WindowContent {
                 } catch (Exception ignored) {}
                 chrome.dirty = true;
             });
+            mp.setOnInfoListener((p, what, extra) -> {
+                if (what == android.media.MediaPlayer.MEDIA_INFO_BUFFERING_START) buffering = true;
+                else if (what == android.media.MediaPlayer.MEDIA_INFO_BUFFERING_END) buffering = false;
+                chrome.dirty = true;
+                return false;
+            });
             mp.setOnErrorListener((p, what, extra) -> {
                 error = true;
+                buffering = false;
                 chrome.dirty = true;
                 host.toast(host.activity().getString(R.string.cinema_error));
                 return true;
@@ -155,6 +174,12 @@ public class CinemaWindow implements WindowContent {
         } catch (Exception e) {
             error = true;
         }
+        chrome.dirty = true;
+    }
+
+    private void setVol(float v) {
+        vol = Math.max(0f, Math.min(1f, v));
+        try { if (mp != null && prepared) mp.setVolume(vol, vol); } catch (Exception ignored) {}
         chrome.dirty = true;
     }
 
@@ -185,6 +210,8 @@ public class CinemaWindow implements WindowContent {
 
     @Override public void onClick(String id) {
         switch (id) {
+            case "voldown": setVol(vol - 0.1f); break;
+            case "volup": setVol(vol + 0.1f); break;
             case "rew": seek(-30000); break;
             case "ff": seek(30000); break;
             case "play": togglePlay(); break;

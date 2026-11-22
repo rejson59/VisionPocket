@@ -97,4 +97,13 @@
     <string name="proj_name_equal">Equirect</string>
     <string name="proj_name_dome">Kopuła</string>
     <string name="proj_name_planet">Planetka</string>
+    <string name="cinema_buffering">Buforowanie…</string>
+    <string name="err_recovered">Wychodzi z błędu — Twoje ustawienia zostały zachowane</string>
+    <string name="settings_perf">Profil wydajności</string>
+    <string name="settings_haptics">Wibracja kliknięć</string>
+    <string name="win_calib">Kalibracja IPD</string>
+    <string name="calib_open">Kalibruj</string>
+    <string name="calib_hint1">Zmieniaj IPD, aż linie będą ostre i pojedyncze.</string>
+    <string name="calib_hint2">Ustawienia → Kalibruj w każdej chwili; IPD zostaje zapamiętane.</string>
+    <string name="calib_done">✓  Gotowe</string>
 </resources>

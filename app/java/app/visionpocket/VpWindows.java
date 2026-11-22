@@ -27,6 +27,7 @@ public class VpWindows {
         void openStreamDialog();
         void applyFrontCam();
         void vrScreenshot();
+        void openCalibration();
     }
 
     // ============================ Window ============================

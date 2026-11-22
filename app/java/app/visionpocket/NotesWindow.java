@@ -98,7 +98,7 @@ public class NotesWindow implements WindowContent {
     @Override public void onClick(String id) {
         if ("edit".equals(id)) {
             new KeyboardWindow(wm, host, host.activity().getString(R.string.kb_title_note),
-                    note, false, new KeyboardWindow.Callback() {
+                    note, new KeyboardWindow.Callback() {
                 @Override public void onOk(String t) {
                     note = t;
                     chrome.dirty = true;

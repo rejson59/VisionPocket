@@ -15,7 +15,7 @@ lub pięknych środowisk wirtualnych.
 
 ---
 
-## Features / Funkcje (v1.3)
+## Features / Funkcje (v1.4)
 
 - 🖼️ **Spatial windows (Windows-style)** — apps open as floating windows with a title
   bar, ✕ close and — minimize; bring to front, cascade placement, minimized windows
@@ -64,11 +64,20 @@ lub pięknych środowisk wirtualnych.
 - ⚙️ **Settings window** — IPD, lens distortion strength, resolution, passthrough
   on/off/rotation/zoom
 - 🌐 **PL + EN**, boot chime + click sounds, status bar (time · FPS · battery)
-- 📦 **Tiny APK (~0.25 MB)** — native Android (Java + OpenGL ES 2.0), instant startup
+- 🧠 **Desktop session** — your window layout and dock placement survive app
+  restarts
+- 🎞 **Side-by-side 3D movies** — cinema auto-detects SBS files and plays them in
+  proper stereoscopy (left half → left eye, right half → right eye)
+- 🔉 **Cinema volume + buffering indicator**, **🔋 performance profiles**
+  (battery / balanced / full power) shaping the adaptive resolution
+- 🎯 **IPD calibration wizard** — line pattern test with −/+ and it remembers
+- ⌨ **Keyboard shift key**, ✨ **click haptics** (toggle), **🛡 crash-guard** —
+  the app recovers gracefully and keeps your settings
+- 📦 **Tiny APK (~0.26 MB)** — native Android (Java + OpenGL ES 2.0), instant startup
 
 ## Install / Instalacja
 
-1. Download `release/VisionPocket-v1.3.apk` (Android 8.0+ / API 26+).
+1. Download `release/VisionPocket-v1.4.apk` (Android 8.0+ / API 26+).
 2. Allow "install unknown apps" for your file manager, then tap the APK.
 3. Run → **START VR** → grant camera permission (or "Start without camera").
 4. Insert the phone into any phone-VR headset, **landscape** orientation.
@@ -119,7 +128,8 @@ app/
     LauncherWindow.java        installed-apps launcher window
     NotesWindow.java           quick notes window
     VisualizerWindow.java      music visualizer window
-    KeyboardWindow.java        3D QWERTY input dialog
+    KeyboardWindow.java        3D QWERTY input dialog (shift key)
+    CalibrationWindow.java     IPD calibration wizard
     PhotosWindow.java          image viewer window
     EnvWindow.java             environment switcher (passthrough/space/horizon)
     SettingsWindow.java        IPD / distortion / resolution / passthrough options
@@ -134,7 +144,7 @@ tools/
   build_apk.py                 full APK build pipeline (no Gradle, no SDK download)
   vp-debug.keystore            debug signing key (passphrase: visionpocket)
 release/
-  VisionPocket-v1.3.apk        signed, ready-to-install build
+  VisionPocket-v1.4.apk        signed, ready-to-install build
 ```
 
 ## Build from source / Budowanie ze źródeł
@@ -142,8 +152,8 @@ release/
 See [BUILDING.md](BUILDING.md). Short version:
 
 ```bash
-python3 tools/build_apk.py --version-name 1.3 --version-code 4
-# -> release/VisionPocket-v1.3.apk
+python3 tools/build_apk.py --version-name 1.4 --version-code 5
+# -> release/VisionPocket-v1.4.apk
 ```
 
 The pipeline (aapt2 → javac → D8 → aligned zip → apksigner) needs **no Android SDK
@@ -152,9 +162,8 @@ previous ones without uninstalling.
 
 ## Roadmap / Plany
 
-- Real camera-based hand tracking where the device supports it (MediaPipe-style)
-- Multiplayer rooms over Wi-Fi, spatial anchors (QR/ArUco pinning)
-- Desktop PC streaming client, curved 360° video projection refinements
-- Bluetooth gamepad haptics, virtual desktop spaces
+- Multiplayer rooms over Wi-Fi (shared spaces between phones)
+- Spatial anchors (QR/ArUco pinning), PC streaming client
+- Virtual desktop spaces, gamepad haptics polish
 
 *VisionPocket — big-tech immersion, pocket-sized budget.*

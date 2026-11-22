@@ -18,6 +18,8 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.os.Vibrator;
+import android.os.VibrationEffect;
 
 public class MainActivity extends Activity {
 
@@ -31,12 +33,23 @@ public class MainActivity extends Activity {
     private int batteryPct = 100;
     private boolean vrStarted = false;
     private boolean pickForPano = false;
+    private SettingsStore settingsStore;
+    private Vibrator vibrator;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
+
+        settingsStore = new SettingsStore(this);
+        vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+        // crash-guard: remember the crash so the next launch can tell the user
+        final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            try { settingsStore.setLastCrash(System.currentTimeMillis()); } catch (Exception ignored) {}
+            if (prev != null) prev.uncaughtException(t, e);
+        });
 
         onboarding = findViewById(R.id.onboarding);
         glView = findViewById(R.id.gl_view);
@@ -277,6 +290,9 @@ public class MainActivity extends Activity {
     public void playClick() {
         try {
             if (soundPool != null) soundPool.play(clickId, 0.4f, 0.4f, 2, 0, 1f);
+            if (settingsStore.haptics() && vibrator != null) {
+                vibrator.vibrate(VibrationEffect.createOneShot(14, VibrationEffect.DEFAULT_AMPLITUDE));
+            }
         } catch (Exception ignored) {}
     }
 
