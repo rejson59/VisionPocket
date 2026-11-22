@@ -1,3 +1,11 @@
+## ⬇️ POBIERZ APK
+
+**Sposób 1 (najszybszy):** [➡️ kliknij TUTAJ — plik APK](https://github.com/rejson59/VisionPocket/raw/arena/49b8c2a9-visionpocket/release/VisionPocket-v1.9.apk) → przycisk „Download raw file" / zapisz link
+
+**Sposób 2:** pobierz **„Source code (zip)"** z tej strony → rozpakuj → w środku jest `release/VisionPocket-v1.9.apk` *(zweryfikowane: versionCode 11 ✓)*
+
+*(Upload plików binarnych do wydania jest zablokowany w moim środowisku budowania — dlatego APK żyje w repo.)*
+
 ## 🚨 NAJWAŻNIEJSZE: naprawiony crash przy starcie
 
 **Wszystkie wcześniejsze wersje wywalały się na prawdziwym telefonie** — Twój zrzut ekranu to pokazał: `res/raw/chime.wav` był **skompresowany** w APK, a `SoundPool` wymaga plików nieskompresowanych (mmap). Wina leżała w naszym pipeline pakowania. v1.9:

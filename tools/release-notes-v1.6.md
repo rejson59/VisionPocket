@@ -1,3 +1,8 @@
+## ⬇️ POBIERZ APK
+
+Pobierz **„Source code (zip)"** z tej strony → rozpakuj → w środku: `release/VisionPocket-v1.6.apk`.
+(Najnowsza wersja: **[v1.9](https://github.com/rejson59/VisionPocket/releases/tag/v1.9)** — pierwsza bez buga crashu startu!)
+
 ## 📱 Instalacja / Install
 
 **Pobierz APK bezpośrednio z repozytorium:**
