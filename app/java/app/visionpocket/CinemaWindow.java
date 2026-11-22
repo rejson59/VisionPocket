@@ -51,10 +51,12 @@ public class CinemaWindow implements WindowContent {
 
         // buttons in body coords + STRIP offset (hit-test uses full-canvas px)
         int s = VpWindows.STRIP_PX;
-        chrome.add("rew", 60, 30 + s, 300, 170 + s);
-        chrome.add("play", 340, 30 + s, 580, 170 + s);
-        chrome.add("ff", 620, 30 + s, 860, 170 + s);
-        chrome.add("pick", 900, 30 + s, 1000, 170 + s);
+        chrome.add("rew", 40, 30 + s, 250, 170 + s);
+        chrome.add("play", 270, 30 + s, 480, 170 + s);
+        chrome.add("ff", 500, 30 + s, 710, 170 + s);
+        chrome.add("pick", 730, 30 + s, 830, 170 + s);
+        chrome.add("url", 850, 30 + s, 950, 170 + s);
+        chrome.add("exit", 970, 30 + s, 1070, 170 + s);
         chrome.click = b -> onClick(b.id);
         video.click = b -> {};
 
@@ -105,6 +107,8 @@ public class CinemaWindow implements WindowContent {
                         : host.activity().getString(R.string.cinema_btn_play); break;
                 case "ff": label = host.activity().getString(R.string.cinema_btn_ff); break;
                 case "pick": label = "📂"; break;
+                case "url": label = "📡"; break;
+                case "exit": label = "⏏"; break;
                 default: label = "";
             }
             HomeSceneUtil.drawCentered(c, label,
@@ -185,11 +189,24 @@ public class CinemaWindow implements WindowContent {
             case "ff": seek(30000); break;
             case "play": togglePlay(); break;
             case "pick": host.pickVideo(); break;
+            case "url": host.openStreamDialog(); break;
+            case "exit": wm.close(window); break;
         }
     }
 
     @Override public void onBodyClick(Panel part) {
         if (part == video || part == chrome) togglePlay();
+    }
+
+    /** Streams a remote URL (mp4 / HLS / radio) on the cinema screen. */
+    public void loadStream(String url) {
+        if (url == null || url.trim().isEmpty()) return;
+        Uri u;
+        try {
+            u = Uri.parse(url.trim());
+        } catch (Exception e) { return; }
+        loadVideo(u, null, null);
+        host.toast(host.activity().getString(R.string.stream_started));
     }
 
     @Override public void update() {

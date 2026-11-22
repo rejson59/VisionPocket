@@ -37,6 +37,9 @@ public class CameraPipeline {
     private Surface previewSurface;
     private volatile boolean started = false;
 
+    /** false = back camera (MR), true = front camera (selfie AR). */
+    public volatile boolean front = false;
+
     public int sensorOrientation = 90;
     public int streamWidth = 1280, streamHeight = 720;
     public volatile boolean frameAvailable = false;
@@ -81,8 +84,8 @@ public class CameraPipeline {
         threads.ensure();
         try {
             CameraManager cm = (CameraManager) ctx.getSystemService(Context.CAMERA_SERVICE);
-            String id = findBackCamera(cm);
-            if (id == null) { fail("no back camera"); return; }
+            String id = findCamera(cm, front);
+            if (id == null) { fail("no " + (front ? "front" : "back") + " camera"); return; }
             CameraCharacteristics ch = cm.getCameraCharacteristics(id);
             Integer orient = ch.get(CameraCharacteristics.SENSOR_ORIENTATION);
             sensorOrientation = orient == null ? 90 : orient;
@@ -108,11 +111,12 @@ public class CameraPipeline {
 
     private void fail(String msg) { started = false; if (listener != null) listener.onCameraFailed(msg); }
 
-    private String findBackCamera(CameraManager cm) {
+    private String findCamera(CameraManager cm, boolean front) {
+        int want = front ? CameraCharacteristics.LENS_FACING_FRONT : CameraCharacteristics.LENS_FACING_BACK;
         try {
             for (String id : cm.getCameraIdList()) {
                 Integer f = cm.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING);
-                if (f != null && f == CameraCharacteristics.LENS_FACING_BACK) return id;
+                if (f != null && f == want) return id;
             }
         } catch (Exception ignored) {}
         return null;

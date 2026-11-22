@@ -23,6 +23,7 @@ public class PanoramaWindow implements WindowContent {
     private final Paint pBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pLabel = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pText = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pLabel2 = new Paint(Paint.ANTI_ALIAS_FLAG);
     private int lastMode = -1;
 
     public PanoramaWindow(VpWindows wm, VrRenderer ren) {
@@ -35,9 +36,12 @@ public class PanoramaWindow implements WindowContent {
         window.content = this;
 
         int s = VpWindows.STRIP_PX;
-        chrome.add("img", 60, 16 + s, 900, 216 + s);
-        chrome.add("vid", 60, 236 + s, 900, 436 + s);
-        chrome.add("off", 60, 456 + s, 900, 616 + s);
+        chrome.add("img", 60, 16 + s, 900, 196 + s);
+        chrome.add("vid", 60, 216 + s, 900, 396 + s);
+        chrome.add("off", 60, 416 + s, 900, 566 + s);
+        chrome.add("proj0", 60, 586 + s, 300, 686 + s);
+        chrome.add("proj1", 330, 586 + s, 570, 686 + s);
+        chrome.add("proj2", 600, 586 + s, 840, 686 + s);
         chrome.click = b -> onClick(b.id);
 
         pBg.setColor(0xFF0E101A);
@@ -52,6 +56,9 @@ public class PanoramaWindow implements WindowContent {
         pText.setColor(0xFF9AA3B8);
         pText.setTextSize(40f);
         pText.setTextAlign(Paint.Align.LEFT);
+        pLabel2.setColor(0xFFE8ECF5);
+        pLabel2.setTextSize(46f);
+        pLabel2.setTextAlign(Paint.Align.CENTER);
 
         wm.placeNew(window);
     }
@@ -97,6 +104,8 @@ public class PanoramaWindow implements WindowContent {
         } else if ("off".equals(id)) {
             ren.panoClear();
             chrome.dirty = true;
+        } else if (id.startsWith("proj")) {
+            ren.setPanoProj(Integer.parseInt(id.substring(4)));
         }
         chrome.dirty = true;
     }

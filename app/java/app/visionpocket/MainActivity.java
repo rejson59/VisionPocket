@@ -13,6 +13,7 @@ import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -142,6 +143,58 @@ public class MainActivity extends Activity {
             return true;
         }
         return super.onKeyDown(keyCode, event);
+    }
+
+    // ================= gamepad (Bluetooth controllers) =================
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (vrStarted) {
+            int src = event.getSource();
+            boolean gamepad = (src & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+                    || (src & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+                    || (src & InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD;
+            if (gamepad) {
+                int code = event.getKeyCode();
+                if (code == KeyEvent.KEYCODE_BUTTON_A
+                        || code == KeyEvent.KEYCODE_BUTTON_B
+                        || code == KeyEvent.KEYCODE_BUTTON_R1
+                        || code == KeyEvent.KEYCODE_BUTTON_START) {
+                    if (event.getRepeatCount() == 0) {
+                        renderer.postGamepadButton(code, event.getAction() == KeyEvent.ACTION_DOWN);
+                    }
+                    return true;
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (vrStarted) {
+            int src = event.getSource();
+            if ((src & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) {
+                float x = event.getAxisValue(MotionEvent.AXIS_X);
+                float y = event.getAxisValue(MotionEvent.AXIS_Y);
+                float rt = Math.max(
+                        Math.max(event.getAxisValue(MotionEvent.AXIS_RTRIGGER),
+                                event.getAxisValue(MotionEvent.AXIS_RZ)),
+                        event.getAxisValue(MotionEvent.AXIS_GAS));
+                renderer.postGamepadStick(x, y);
+                renderer.postGamepadTrigger(rt);
+                return true;
+            }
+        }
+        return super.dispatchGenericMotionEvent(event);
+    }
+
+    /** Runtime mic permission for the music visualizer (fallback works without it). */
+    public void ensureRecordAudio() {
+        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 13);
+        }
     }
 
     // ================= pickers =================

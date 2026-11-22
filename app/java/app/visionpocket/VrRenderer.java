@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -11,9 +12,14 @@ import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
+import android.os.Environment;
 import android.os.SystemClock;
 import android.view.Surface;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.nio.FloatBuffer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -27,13 +33,14 @@ import javax.microedition.khronos.opengles.GL10;
 /**
  * VisionPocket spatial engine:
  * - stereoscopic rendering with barrel-distortion correction
- * - world backgrounds: camera passthrough, procedural space, horizon grid,
- *   360° equirectangular panoramas (photo or video)
- * - Windows-style spatial windows (open, grab, move, depth, scale, minimize)
- * - curved cinema screen (Quest-style cylindrical mesh)
- * - screen mirroring via MediaProjection
+ * - backgrounds: passthrough (back/front camera), procedural space/horizon,
+ *   360° equirectangular panoramas (photo/video) with projection modes
+ * - Windows-style spatial windows: open, grab, move, depth, scale, minimize,
+ *   inertia physics, snap-to-face
+ * - hand-style touch interaction + gamepad (stick cursor/laser, grab, depth)
+ * - curved cinema screen, screen mirroring, app launcher, 3D keyboard,
+ *   notes, music visualizer, VR screenshots
  * - adaptive eye resolution to hold frame rate
- * - hand-style touch interaction mapped onto window surfaces
  */
 public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         CameraPipeline.Listener, HeadTracker.RecenterListener {
@@ -51,8 +58,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     // --- programs ---
     private int pPanel, pCam, pDist, pColor, pEnvSpace, pEnvHorizon;
-    private int uPanelMVP, aPanelPos, aPanelUV, uPanelTex, uPanelAlpha;
-    private int uCamMVP, aCamPos, aCamUV, uCamTex, uCamAngle, uCamZoom, uCamOverscan;
+    private int uPanelMVP, aPanelPos, aPanelUV, uPanelTex, uPanelAlpha, uPanelMode;
+    private int uCamMVP, aCamPos, aCamUV, uCamTex, uCamAngle, uCamZoom, uCamOverscan, uCamMode;
     private int aDistPos, uDistScene, uDistEyeCenter, uDistHalf, uDistAspect, uDistK1, uDistK2;
     private int uColorMVP, aColorPos, uColorColor;
     private int uSpaceMVP, aSpacePos, aSpaceUV, uSpaceTime;
@@ -87,7 +94,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private SurfaceTexture mirrorST;
     private Surface mirrorSurface;
     private boolean mirrorFrame = false;
-    private int mirrorState = 0; // 0 off, 1 live
+    private int mirrorState = 0;
     private MirrorWindow mirrorWin;
 
     // --- FBO + adaptive resolution ---
@@ -103,11 +110,11 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private float ptxCx = 0f, ptxCy = 0f, ptxCz = -PASSTHROUGH_DIST, ptxYaw = 0f;
     private float ptxW = 12f, ptxH = 8f;
 
-    // --- dock + status bar + reticle ---
+    // --- dock + status bar + reticle/hand ---
     private final Panel dock;
     private final Panel statusBar;
     private final Panel reticle;
-    private int reticleMode = 0;      // 0 dot, 1 open hand, 2 grab
+    private int reticleMode = 0;      // 0 dot, 1 open hand, 2 grab hand
     private boolean reticleWorld = false;
     private float reticleScale = 1f;
     private float handWorldX, handWorldY, handWorldZ, handYaw;
@@ -127,9 +134,20 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private float gestureScale0 = 1f, pinchInit = 1f, gestureLastMidY = 0f;
     private float velPx = 0f, velPy = 0f;
 
-    // --- window inertia (physics) ---
+    // --- window inertia ---
     private VpWindows.Window inertWin;
     private float inertVX, inertVY, inertVZ;
+
+    // --- gamepad ---
+    private boolean gpActive = false;
+    private float gpYaw = 0f, gpPitch = 0f;      // ray offsets (radians)
+    private float gpStickX = 0f, gpStickY = 0f;
+    private boolean gpGrabbing = false;
+    private float gpDepth = 0f;                  // right trigger 0..1
+    private FloatBuffer laserBuf;
+
+    // --- screenshot ---
+    private volatile boolean shotRequested = false;
 
     // --- timing ---
     private long lastNs = 0;
@@ -152,12 +170,26 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             "varying vec2 vUV;\n" +
             "void main(){ gl_Position = uMVP * aPos; vUV = aUV; }\n";
 
+    private static final String MODE_GLSL =
+            "vec2 applyMode(vec2 uv, float m){\n" +
+            "  if (m > 0.5 && m < 1.5) {\n" +
+            "    uv.y = 0.5 + (uv.y - 0.5) * abs(uv.y - 0.5) * 2.0;\n" +
+            "  } else if (m > 1.5) {\n" +
+            "    float v = 1.0 - uv.y;\n" +
+            "    uv.y = 0.5 + (v - 0.5) * abs(v - 0.5) * 2.0;\n" +
+            "    uv.x = 1.0 - uv.x;\n" +
+            "  }\n" +
+            "  return uv;\n" +
+            "}\n";
+
     private static final String FS_PANEL =
             "precision mediump float;\n" +
             "uniform sampler2D uTex;\n" +
             "uniform float uAlpha;\n" +
+            "uniform float uMode;\n" +
             "varying vec2 vUV;\n" +
-            "void main(){ vec4 c = texture2D(uTex, vUV); gl_FragColor = vec4(c.rgb, c.a * uAlpha); }\n";
+            MODE_GLSL +
+            "void main(){ vec4 c = texture2D(uTex, applyMode(vUV, uMode)); gl_FragColor = vec4(c.rgb, c.a * uAlpha); }\n";
 
     private static final String FS_CAM =
             "#extension GL_OES_EGL_image_external : require\n" +
@@ -166,14 +198,16 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             "uniform float uAngle;\n" +
             "uniform float uZoom;\n" +
             "uniform float uOverscan;\n" +
+            "uniform float uMode;\n" +
             "varying vec2 vUV;\n" +
+            MODE_GLSL +
             "void main(){\n" +
             "  vec2 c = vUV - vec2(0.5);\n" +
             "  float cs = cos(uAngle);\n" +
             "  float sn = sin(uAngle);\n" +
             "  c = vec2(c.x*cs - c.y*sn, c.x*sn + c.y*cs);\n" +
             "  c = c / (uZoom * uOverscan);\n" +
-            "  gl_FragColor = texture2D(uCam, vec2(0.5) + c);\n" +
+            "  gl_FragColor = texture2D(uCam, applyMode(vec2(0.5) + c, uMode));\n" +
             "}\n";
 
     private static final String FS_SPACE =
@@ -264,19 +298,21 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         this.wm = new VpWindows(this);
         head.setRecenterListener(this);
 
+        String[] ids = {"recenter", "cinema", "photos", "pano", "mirror", "notes", "apps", "viz", "env", "settings"};
         dock = new Panel(0f, -0.45f, -1.6f, 0f, 1.3f, 0.17f, 1000f);
-        String[] ids = {"recenter", "cinema", "photos", "pano", "mirror", "env", "settings"};
         for (int i = 0; i < ids.length; i++) {
-            int x0 = 22 + i * 118;
-            dock.add(ids[i], x0, 30, x0 + 96, 130);
+            int x0 = 60 + i * 114;
+            dock.add(ids[i], x0, 30, x0 + 92, 130);
         }
         dock.hook = this::drawDock;
 
         statusBar = new Panel(0f, 0.42f, -1.05f, 0f, 0.85f, 0.12f, 1000f);
         statusBar.hook = this::drawStatusBar;
 
-        reticle = new Panel(0f, 0f, -0.7f, 0f, 0.07f, 0.07f, 1400f);
+        reticle = new Panel(0f, 0f, -0.7f, 0f, 0.075f, 0.075f, 1400f);
         reticle.hook = this::drawReticle;
+
+        laserBuf = GlUtil.fb(new float[6]);
 
         MirrorService.stopListener = () -> glQueue.add(() -> {
             mirrorState = 0;
@@ -298,6 +334,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         aPanelUV = GLES20.glGetAttribLocation(pPanel, "aUV");
         uPanelTex = GLES20.glGetUniformLocation(pPanel, "uTex");
         uPanelAlpha = GLES20.glGetUniformLocation(pPanel, "uAlpha");
+        uPanelMode = GLES20.glGetUniformLocation(pPanel, "uMode");
 
         pCam = GlUtil.createProgram(VS_TEX, FS_CAM);
         uCamMVP = GLES20.glGetUniformLocation(pCam, "uMVP");
@@ -307,6 +344,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         uCamAngle = GLES20.glGetUniformLocation(pCam, "uAngle");
         uCamZoom = GLES20.glGetUniformLocation(pCam, "uZoom");
         uCamOverscan = GLES20.glGetUniformLocation(pCam, "uOverscan");
+        uCamMode = GLES20.glGetUniformLocation(pCam, "uMode");
 
         pEnvSpace = GlUtil.createProgram(VS_TEX, FS_SPACE);
         uSpaceMVP = GLES20.glGetUniformLocation(pEnvSpace, "uMVP");
@@ -345,6 +383,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         vidTex = GlUtil.createOesTexture();
         panoVidTex = GlUtil.createOesTexture();
         panoMesh = Mesh.sphere(PANO_RADIUS, 48, 32);
+        mirrorTex = GlUtil.createOesTexture();
 
         // GL textures are invalidated with the context
         dock.tex = -1; dock.dirty = true;
@@ -352,7 +391,6 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         reticle.tex = -1; reticle.dirty = true;
         panoTex = -1;
         panoST = null; panoSurface = null; panoMp = null; panoVideoReady = false;
-        mirrorTex = GlUtil.createOesTexture();
         mirrorST = null; mirrorSurface = null;
         for (VpWindows.Window w : wm.list) {
             for (VpWindows.Window.Part pt : w.parts) { pt.panel.tex = -1; pt.panel.dirty = true; }
@@ -404,19 +442,21 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         }
         wm.update();
         updateInertia(dt);
+        applyGamepadFrame(dt);
 
-        // --- gaze hover ---
+        // --- gaze / gamepad hover ---
         clearAllHover();
-        VpWindows.Hit hoverHit = raycastGaze();
+        float[] rayDir = currentRay();
+        VpWindows.Hit hoverHit = raycastAlong(rayDir);
         boolean somethingHovered = hoverHit != null && hoverHit.panel.hoveredButton() != null;
 
-        // --- reticle mode ---
-        if (touchMode == TM_IDLE) {
-            reticleMode = 0;
+        // --- reticle / hand mode ---
+        if (touchMode == TM_IDLE && !gpGrabbing) {
+            reticleMode = gpActive ? 1 : 0;
             reticleWorld = false;
             reticleScale += ((somethingHovered ? 1.6f : 1f) - reticleScale) * 0.3f;
         } else {
-            reticleMode = grabWin != null ? 2 : 1;
+            reticleMode = (grabWin != null || gpGrabbing) ? 2 : 1;
             float[] rot = head.rotation();
             handWorldX = grabDist * -rot[8];
             handWorldY = grabDist * -rot[9];
@@ -452,6 +492,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glEnable(GLES20.GL_BLEND);
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
 
+        int panoProj = settings.panoProj();
+
         for (int eye = 0; eye < 2; eye++) {
             int vx = eye == 0 ? 0 : fboW / 2;
             GLES20.glViewport(vx, 0, fboW / 2, fboH);
@@ -471,14 +513,14 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             VpWindows.Window panoW = wm.find("pano");
             boolean panoVisible = panoMode != PANO_OFF && panoW != null && !panoW.minimized;
             if (panoVisible) {
-                drawPano(pv);
+                drawPano(pv, panoProj);
             } else {
                 int envMode = settings.envMode();
                 boolean passthroughLive = envMode == 0 && settings.passthrough()
                         && cameraAllowed && camFrameEver;
                 if (passthroughLive) {
                     drawCamQuad(camTex, ptxCx, ptxCy, ptxCz, ptxYaw, ptxW, ptxH,
-                            settings.rotDeg(), settings.zoom(), OVERSCAN, pv);
+                            settings.rotDeg(), settings.zoom(), OVERSCAN, pv, 0f);
                 } else if (envMode == 2) {
                     drawEnvQuad(pEnvHorizon, uHorMVP, aHorPos, aHorUV, uHorTime, pv);
                 } else {
@@ -499,11 +541,11 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                             drawOesMesh(p.oesTex, p, pv);
                         } else {
                             drawCamQuad(p.oesTex, p.cx, p.cy, p.cz, p.yaw, p.width, p.height,
-                                    0f, 1f, 1f, pv);
+                                    0f, 1f, 1f, pv, 0f);
                         }
                     } else {
                         p.renderIfNeeded();
-                        drawTexturedQuad(p.tex, p.cx, p.cy, p.cz, p.yaw, p.width, p.height, 1f, 1f, pv);
+                        drawTexturedQuad(p.tex, p.cx, p.cy, p.cz, p.yaw, p.width, p.height, 1f, 1f, pv, 0f);
                     }
                 }
             }
@@ -511,21 +553,36 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             // dock
             dock.renderIfNeeded();
             drawTexturedQuad(dock.tex, dock.cx, dock.cy, dock.cz, dock.yaw,
-                    dock.width, dock.height, 1f, 0.96f, pv);
+                    dock.width, dock.height, 1f, 0.96f, pv, 0f);
 
-            // head-locked status bar
+            // status bar
             statusBar.renderIfNeeded();
             drawTexturedQuad(statusBar.tex, statusBar.cx, statusBar.cy, statusBar.cz, 0f,
-                    statusBar.width, statusBar.height, 1f, 0.92f, headPv);
+                    statusBar.width, statusBar.height, 1f, 0.92f, headPv, 0f);
+
+            // gamepad laser
+            if (gpActive) {
+                float dist = hoverHit != null ? Math.min(hoverHit.t, 4f) : 1.6f;
+                drawLaser(rayDir, dist, pv);
+            }
 
             // reticle / hand cursor
             reticle.renderIfNeeded();
             if (reticleWorld) {
                 drawTexturedQuad(reticle.tex, handWorldX, handWorldY, handWorldZ, handYaw,
-                        reticle.width, reticle.height, reticleScale, 0.97f, pv);
+                        reticle.width, reticle.height, reticleScale, 0.97f, pv, 0f);
+            } else if (gpActive) {
+                drawTexturedQuad(reticle.tex, rayDir[0] * 0.8f, rayDir[1] * 0.8f, rayDir[2] * 0.8f, 0f,
+                        reticle.width, reticle.height, reticleScale, 0.97f, headPv, 0f);
             } else {
                 drawTexturedQuad(reticle.tex, reticle.cx, reticle.cy, reticle.cz, 0f,
-                        reticle.width, reticle.height, reticleScale, 0.97f, headPv);
+                        reticle.width, reticle.height, reticleScale, 0.97f, headPv, 0f);
+            }
+
+            // VR screenshot (before leaving the FBO)
+            if (shotRequested && eye == 1) {
+                shotRequested = false;
+                captureShot(fboW / 2, fboH);
             }
         }
 
@@ -554,7 +611,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     // ================= adaptive resolution =================
 
     private void adaptResolution(float dt) {
-        if (runTime < 2.5f) return; // let fps estimate settle
+        if (runTime < 2.5f) return;
         if (fps < 52f) {
             lowTimer += dt;
             highTimer = 0f;
@@ -581,10 +638,146 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         }
     }
 
+    // ================= rays / gamepad =================
+
+    /** Gaze ray or gamepad-offset ray (head-relative). */
+    private float[] currentRay() {
+        float[] rot = head.rotation();
+        float fx = -rot[8], fy = -rot[9], fz = -rot[10];
+        if (!gpActive) return new float[]{fx, fy, fz};
+        float yaw0 = (float) Math.atan2(fx, -fz);
+        float pitch0 = (float) Math.asin(Math.max(-1f, Math.min(1f, fy)));
+        float yaw = yaw0 + gpYaw;
+        float pitch = Math.max(-1.3f, Math.min(1.3f, pitch0 + gpPitch));
+        float cp = (float) Math.cos(pitch);
+        return new float[]{(float) Math.sin(yaw) * cp, (float) Math.sin(pitch), -(float) Math.cos(yaw) * cp};
+    }
+
+    private VpWindows.Hit raycastAlong(float[] dir) {
+        float fx = dir[0], fy = dir[1], fz = dir[2];
+        VpWindows.Hit best = wm.raycast(0f, 0f, 0f, fx, fy, fz);
+        float[] dh = dock.rayHit(0f, 0f, 0f, fx, fy, fz);
+        if (dh != null && (best == null || dh[0] < best.t)) {
+            best = new VpWindows.Hit(null, dock, dh[0], dh[1], dh[2]);
+        }
+        return best;
+    }
+
+    public void postGamepadStick(float x, float y) {
+        glQueue.add(() -> {
+            if (Math.abs(x) < 0.16f && Math.abs(y) < 0.16f) return;
+            gpActive = true;
+            if (!gpGrabbing && grabWin == null) {
+                gpYaw = Math.max(-0.6f, Math.min(0.6f, gpYaw + x * 0.045f));
+                gpPitch = Math.max(-0.5f, Math.min(0.5f, gpPitch - y * 0.032f));
+            }
+            gpStickX = x;
+            gpStickY = y;
+        });
+    }
+
+    public void postGamepadTrigger(float v) {
+        glQueue.add(() -> gpDepth = Math.max(0f, Math.min(1f, v)));
+    }
+
+    public void postGamepadButton(int code, boolean down) {
+        glQueue.add(() -> {
+            switch (code) {
+                case 96: // A
+                    if (down) doSelectCurrent();
+                    break;
+                case 97: // B
+                    if (down) back();
+                    break;
+                case 102: // R1
+                    if (down) gamepadGrabStart();
+                    else gamepadGrabEnd();
+                    break;
+                case 108: // START / menu
+                    if (down) recenterView();
+                    break;
+                default:
+                    break;
+            }
+        });
+    }
+
+    private void gamepadGrabStart() {
+        VpWindows.Hit h = raycastAlong(currentRay());
+        if (h == null) return;
+        gpGrabbing = true;
+        grabPanel = h.panel;
+        grabWin = h.win;
+        grabDist = h.t;
+        computeGrabBasis();
+        if (grabWin != null) wm.focus(grabWin);
+    }
+
+    private void gamepadGrabEnd() {
+        gpGrabbing = false;
+        if (grabWin != null) releaseWithPhysics();
+        grabWin = null;
+        grabPanel = null;
+        clearAllHover();
+    }
+
+    private void applyGamepadFrame(float dt) {
+        if (!gpGrabbing) return;
+        float kx = grabKx / Math.max(0.001f, 1f / 60f) * dt;
+        if (grabWin != null) {
+            float mx = hr[0] * gpStickX * kx * 46f + hf[0] * gpDepth * dt * 1.5f;
+            float my = hr[1] * (-gpStickY) * kx * 46f + hf[1] * gpDepth * dt * 1.5f;
+            float mz = hr[2] * gpStickX * kx * 46f + hu[1] * (-gpStickY) * kx * 46f + hf[2] * gpDepth * dt * 1.5f;
+            grabWin.moveBy(mx, my, mz);
+        } else if (grabPanel == dock) {
+            float mx = hr[0] * gpStickX * kx * 46f + hf[0] * gpDepth * dt * 1.5f;
+            float my = hr[1] * (-gpStickY) * kx * 46f + hf[1] * gpDepth * dt * 1.5f;
+            float mz = hr[2] * gpStickX * kx * 46f + hu[1] * (-gpStickY) * kx * 46f + hf[2] * gpDepth * dt * 1.5f;
+            dock.cx += mx;
+            dock.cy = Math.max(-1.3f, Math.min(0.7f, dock.cy + my));
+            dock.cz = Math.max(-6f, Math.min(-0.5f, dock.cz + mz));
+        }
+    }
+
+    /** Selection shared by touch tap and gamepad A. */
+    private void doSelectCurrent() {
+        VpWindows.Hit h = raycastAlong(currentRay());
+        if (h == null) return;
+        Panel.Button b = h.panel.hoveredButton();
+        activity.playClick();
+        if (h.panel == dock) {
+            if (b != null) dockAction(b.id);
+            return;
+        }
+        if (h.win != null) {
+            wm.focus(h.win);
+            if (b != null) {
+                routeButton(h.win, b.id);
+            } else if (h.win.content != null) {
+                h.win.content.onBodyClick(h.panel);
+            }
+        }
+    }
+
+    private void drawLaser(float[] dir, float len, float[] pv) {
+        laserBuf.position(0);
+        laserBuf.put(0f).put(0f).put(0f);
+        laserBuf.put(dir[0] * len).put(dir[1] * len).put(dir[2] * len);
+        laserBuf.position(0);
+        GLES20.glUseProgram(pColor);
+        Matrix.setIdentityM(tmpM, 0);
+        GLES20.glUniformMatrix4fv(uColorMVP, 1, false, tmpM, 0);
+        GLES20.glUniform4f(uColorColor, 0.36f, 0.55f, 0.94f, 0.75f);
+        GLES20.glEnableVertexAttribArray(aColorPos);
+        GLES20.glVertexAttribPointer(aColorPos, 3, GLES20.GL_FLOAT, false, 12, laserBuf);
+        GLES20.glLineWidth(4f);
+        GLES20.glDrawArrays(GLES20.GL_LINES, 0, 2);
+        GLES20.glLineWidth(1f);
+    }
+
     // ================= drawing helpers =================
 
     private void sortFarToNear(List<VpWindows.Window> vis, float[] eyeView) {
-        // insertion sort by eye-space z ascending (most negative = farthest, drawn first)
         for (int i = 1; i < vis.size(); i++) {
             VpWindows.Window w = vis.get(i);
             float zw = viewZ(eyeView, w.ax, w.ay, w.az);
@@ -621,7 +814,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     }
 
     private void drawCamQuad(int tex, float cx, float cy, float cz, float yaw,
-                             float w, float h, float angleDeg, float zoom, float overscan, float[] pv) {
+                             float w, float h, float angleDeg, float zoom, float overscan,
+                             float[] pv, float mode) {
         Matrix.setIdentityM(tmpM2, 0);
         Matrix.translateM(tmpM2, 0, cx, cy, cz);
         if (yaw != 0f) Matrix.rotateM(tmpM2, 0, (float) Math.toDegrees(yaw), 0f, 1f, 0f);
@@ -637,6 +831,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glUniform1f(uCamAngle, (float) Math.toRadians(angleDeg));
         GLES20.glUniform1f(uCamZoom, zoom);
         GLES20.glUniform1f(uCamOverscan, overscan);
+        GLES20.glUniform1f(uCamMode, mode);
         GLES20.glEnableVertexAttribArray(aCamPos);
         GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
         GLES20.glEnableVertexAttribArray(aCamUV);
@@ -645,7 +840,6 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glEnable(GLES20.GL_BLEND);
     }
 
-    /** Draws an OES panel with curved geometry (cylinder segment). */
     private void drawOesMesh(int tex, Panel p, float[] pv) {
         float sx = p.width / Math.max(0.01f, p.mesh.baseW);
         Matrix.setIdentityM(tmpM2, 0);
@@ -663,6 +857,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glUniform1f(uCamAngle, 0f);
         GLES20.glUniform1f(uCamZoom, 1f);
         GLES20.glUniform1f(uCamOverscan, 1f);
+        GLES20.glUniform1f(uCamMode, 0f);
         GLES20.glEnableVertexAttribArray(aCamPos);
         GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, p.mesh.pos);
         GLES20.glEnableVertexAttribArray(aCamUV);
@@ -671,8 +866,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glEnable(GLES20.GL_BLEND);
     }
 
-    /** Draws the 360° panorama sphere around the viewer. */
-    private void drawPano(float[] pv) {
+    private void drawPano(float[] pv, float projMode) {
         GLES20.glDisable(GLES20.GL_BLEND);
         Matrix.setIdentityM(tmpM2, 0);
         Matrix.multiplyMM(tmpM3, 0, pv, 0, tmpM2, 0);
@@ -683,6 +877,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, panoTex);
             GLES20.glUniform1i(uPanelTex, 0);
             GLES20.glUniform1f(uPanelAlpha, 1f);
+            GLES20.glUniform1f(uPanelMode, projMode);
             GLES20.glEnableVertexAttribArray(aPanelPos);
             GLES20.glVertexAttribPointer(aPanelPos, 3, GLES20.GL_FLOAT, false, 12, panoMesh.pos);
             GLES20.glEnableVertexAttribArray(aPanelUV);
@@ -697,6 +892,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             GLES20.glUniform1f(uCamAngle, 0f);
             GLES20.glUniform1f(uCamZoom, 1f);
             GLES20.glUniform1f(uCamOverscan, 1f);
+            GLES20.glUniform1f(uCamMode, projMode);
             GLES20.glEnableVertexAttribArray(aCamPos);
             GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, panoMesh.pos);
             GLES20.glEnableVertexAttribArray(aCamUV);
@@ -707,7 +903,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     }
 
     private void drawTexturedQuad(int tex, float cx, float cy, float cz, float yaw,
-                                  float w, float h, float scale, float alpha, float[] pv) {
+                                  float w, float h, float scale, float alpha, float[] pv, float mode) {
         Matrix.setIdentityM(tmpM2, 0);
         Matrix.translateM(tmpM2, 0, cx, cy, cz);
         if (yaw != 0f) Matrix.rotateM(tmpM2, 0, (float) Math.toDegrees(yaw), 0f, 1f, 0f);
@@ -720,6 +916,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, tex);
         GLES20.glUniform1i(uPanelTex, 0);
         GLES20.glUniform1f(uPanelAlpha, alpha);
+        GLES20.glUniform1f(uPanelMode, mode);
         GLES20.glEnableVertexAttribArray(aPanelPos);
         GLES20.glVertexAttribPointer(aPanelPos, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
         GLES20.glEnableVertexAttribArray(aPanelUV);
@@ -727,7 +924,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
 
-    // ================= dock / status / reticle =================
+    // ================= dock / status / hand =================
 
     private void drawDock(Canvas c, Panel p) {
         Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -739,10 +936,10 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         border.setColor(dock.hovered ? 0xFF5B8DEF : 0xFF2A3046);
         c.drawRoundRect(2, 2, p.pw - 2, p.ph - 2, 50, 50, border);
 
-        String[] icons = {"⟲", "🎬", "🖼", "360°", "▣", "🌍", "⚙"};
+        String[] icons = {"⟲", "🎬", "🖼", "360°", "▣", "📝", "🚀", "🎵", "🌍", "⚙"};
         Paint icon = new Paint(Paint.ANTI_ALIAS_FLAG);
         icon.setColor(0xFFE8ECF5);
-        icon.setTextSize(62f);
+        icon.setTextSize(56f);
         icon.setTextAlign(Paint.Align.CENTER);
         Paint btnBg = new Paint(Paint.ANTI_ALIAS_FLAG);
         Paint btnBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -802,23 +999,58 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         }
     }
 
+    /** Procedural hand sprite: palm + 5 fingers, open or closed pose. */
     private void drawReticle(Canvas c, Panel p) {
+        float s = p.pw;
+        float cx = s / 2f, cy = s / 2f;
         if (reticleMode == 0) {
             Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
             dot.setColor(0xF2FFFFFF);
-            c.drawCircle(p.pw / 2f, p.ph / 2f, p.pw / 5.5f, dot);
+            c.drawCircle(cx, cy, s / 5.5f, dot);
             Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
             ring.setColor(0x55FFFFFF);
             ring.setStyle(Paint.Style.STROKE);
-            ring.setStrokeWidth(Math.max(2f, p.pw / 26f));
-            c.drawCircle(p.pw / 2f, p.ph / 2f, p.pw / 3.1f, ring);
-        } else {
-            Paint hand = new Paint(Paint.ANTI_ALIAS_FLAG);
-            hand.setTextAlign(Paint.Align.CENTER);
-            hand.setTextSize(p.pw * 0.72f);
-            String emoji = reticleMode == 2 ? "✊" : "✋";
-            c.drawText(emoji, p.pw / 2f, p.ph / 2f - (hand.ascent() + hand.descent()) / 2f, hand);
+            ring.setStrokeWidth(Math.max(2f, s / 26f));
+            c.drawCircle(cx, cy, s / 3.1f, ring);
+            return;
         }
+        boolean grab = reticleMode == 2;
+        Paint skin = new Paint(Paint.ANTI_ALIAS_FLAG);
+        skin.setColor(0xF2EAEFF7);
+        Paint shade = new Paint(Paint.ANTI_ALIAS_FLAG);
+        shade.setColor(0x668FA7E8);
+        shade.setStyle(Paint.Style.STROKE);
+        shade.setStrokeWidth(s * 0.035f);
+
+        // palm
+        float palmW = s * (grab ? 0.40f : 0.36f);
+        float palmH = s * 0.40f;
+        RectF palm = new RectF(cx - palmW / 2f, cy + s * 0.02f, cx + palmW / 2f, cy + s * 0.02f + palmH);
+        c.drawRoundRect(palm, palmW / 2.2f, palmW / 2.2f, skin);
+        c.drawRoundRect(palm, palmW / 2.2f, palmW / 2.2f, shade);
+
+        // fingers
+        float[] angles = {-30f, -10f, 10f, 30f};
+        float fl = grab ? s * 0.24f : s * 0.46f;
+        float fw = s * 0.115f;
+        Paint f = new Paint(Paint.ANTI_ALIAS_FLAG);
+        f.setColor(0xF2EAEFF7);
+        f.setStrokeWidth(fw);
+        f.setStrokeCap(Paint.Cap.ROUND);
+        for (float a : angles) {
+            float rad = (float) Math.toRadians(a);
+            float bx = cx + (float) Math.sin(rad) * palmW * 0.34f;
+            float by = cy + s * 0.10f;
+            float ex = bx + (float) Math.sin(rad) * (grab ? fw * 0.6f : fl * 0.32f);
+            float ey = by - fl;
+            c.drawLine(bx, by, ex, ey, f);
+        }
+        // thumb
+        float tbx = cx - palmW * 0.52f;
+        float tby = cy + s * 0.24f;
+        float tex = tbx - (grab ? s * 0.06f : s * 0.20f);
+        float tey = tby - (grab ? s * 0.06f : s * 0.16f);
+        c.drawLine(tbx, tby, tex, tey, f);
     }
 
     private void setMsg(String msg, long ms) {
@@ -838,17 +1070,6 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         dock.clearHover();
     }
 
-    private VpWindows.Hit raycastGaze() {
-        float[] rot = head.rotation();
-        float fx = -rot[8], fy = -rot[9], fz = -rot[10];
-        VpWindows.Hit best = wm.raycast(0f, 0f, 0f, fx, fy, fz);
-        float[] dh = dock.rayHit(0f, 0f, 0f, fx, fy, fz);
-        if (dh != null && (best == null || dh[0] < best.t)) {
-            best = new VpWindows.Hit(null, dock, dh[0], dh[1], dh[2]);
-        }
-        return best;
-    }
-
     private void computeGrabBasis() {
         float[] m = head.rotation();
         hr[0] = m[0]; hr[1] = m[1]; hr[2] = m[2];
@@ -861,11 +1082,13 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     private void handleTouch(int type, float[] xs, float[] ys) {
         switch (type) {
-            case 0: { // DOWN
+            case 0: {
                 clearAllHover();
+                gpActive = false;
+                gpYaw = 0f; gpPitch = 0f;
                 downX = xs[0]; downY = ys[0]; lastX = downX; lastY = downY;
                 velPx = 0f; velPy = 0f;
-                VpWindows.Hit h = raycastGaze();
+                VpWindows.Hit h = raycastAlong(currentRay());
                 grabPanel = h != null ? h.panel : null;
                 grabWin = (h != null) ? h.win : null;
                 grabDist = h != null ? h.t : 1.6f;
@@ -874,7 +1097,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 touchMode = TM_PRESSED;
                 break;
             }
-            case 4: { // second pointer down -> depth + scale gesture
+            case 4: {
                 if (xs.length >= 2 && touchMode != TM_IDLE) {
                     touchMode = TM_GESTURE;
                     pinchInit = (float) Math.hypot(xs[1] - xs[0], ys[1] - ys[0]);
@@ -883,7 +1106,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 }
                 break;
             }
-            case 1: { // MOVE
+            case 1: {
                 if (touchMode == TM_IDLE || xs.length == 0) break;
                 float x = xs[0], y = ys[0];
                 if (touchMode == TM_GESTURE) {
@@ -903,7 +1126,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 }
                 break;
             }
-            case 5: { // POINTER_UP (one of several)
+            case 5: {
                 if (touchMode == TM_GESTURE && xs.length == 1) {
                     touchMode = TM_DRAG;
                     lastX = xs[0]; lastY = ys[0];
@@ -911,7 +1134,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 break;
             }
             case 2:
-            case 3: { // UP / CANCEL
+            case 3: {
                 if (touchMode == TM_PRESSED && grabPanel != null) {
                     Panel.Button b = grabPanel.hoveredButton();
                     if (grabPanel == dock) {
@@ -950,7 +1173,6 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         }
     }
 
-    /** On release after a drag: apply inertia + gently snap the window to face the user. */
     private void releaseWithPhysics() {
         if (grabWin == null) return;
         float frameDt = fps > 20f ? 1f / fps : 0.016f;
@@ -1051,6 +1273,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             case "photos": new PhotosWindow(wm, this); break;
             case "pano": new PanoramaWindow(wm, this); break;
             case "mirror": mirrorWin = new MirrorWindow(wm, this); break;
+            case "notes": new NotesWindow(wm, this); break;
+            case "apps": new LauncherWindow(wm, this); break;
+            case "viz":
+                activity.ensureRecordAudio();
+                new VisualizerWindow(wm, this);
+                break;
             case "env": new EnvWindow(wm, this); break;
             case "settings": new SettingsWindow(wm, this); break;
             case "start":
@@ -1088,11 +1316,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             for (VpWindows.Window w : wm.list) {
                 if (w.content instanceof CinemaWindow) { cw = (CinemaWindow) w.content; break; }
             }
-            if (cw == null) {
-                cw = new CinemaWindow(wm, this);
-            } else {
-                wm.focus(cw.window);
-            }
+            if (cw == null) cw = new CinemaWindow(wm, this);
+            else wm.focus(cw.window);
             cw.video.oesTex = vidTex;
             ensureVideoSurface();
             cw.loadVideo(u, vidST, vidSurface);
@@ -1155,7 +1380,6 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         });
     }
 
-    /** Called (any thread) by PanoramaWindow after decoding the photo. */
     public void setPanoImage(Bitmap b) {
         glQueue.add(() -> {
             if (b == null) {
@@ -1219,6 +1443,15 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         });
     }
 
+    public void setPanoProj(int mode) {
+        settings.setPanoProj(mode);
+        String[] names = {
+                activity.getString(R.string.proj_name_equal),
+                activity.getString(R.string.proj_name_dome),
+                activity.getString(R.string.proj_name_planet)};
+        toast(names[Math.max(0, Math.min(2, mode))]);
+    }
+
     // ---- screen mirroring ----
 
     public int mirrorMode() { return mirrorState; }
@@ -1236,7 +1469,6 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         activity.runOnUiThread(() -> MirrorService.requestStop(activity));
     }
 
-    /** Called on the UI thread after the user accepted the projection dialog. */
     public void onProjectionResult(int resultCode, Intent data) {
         glQueue.add(() -> {
             if (mirrorST == null) {
@@ -1251,7 +1483,6 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             svc.putExtra("code", resultCode);
             svc.putExtra("data", data);
             activity.startMirrorService(svc);
-            // screen aspect: portrait phone -> tall screen
             android.util.DisplayMetrics dm = activity.getResources().getDisplayMetrics();
             float aspect = (float) dm.widthPixels / (float) dm.heightPixels;
             if (aspect > 1f) aspect = 1f / aspect;
@@ -1259,6 +1490,94 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             mirrorState = 1;
             toast(activity.getString(R.string.mirror_live));
         });
+    }
+
+    // ---- misc host services ----
+
+    @Override
+    public void openStreamDialog() {
+        new KeyboardWindow(wm, this,
+                activity.getString(R.string.kb_title_url), "https://", true,
+                new KeyboardWindow.Callback() {
+                    @Override public void onOk(String t) {
+                        CinemaWindow cw = null;
+                        for (VpWindows.Window w : wm.list) {
+                            if (w.content instanceof CinemaWindow) { cw = (CinemaWindow) w.content; break; }
+                        }
+                        if (cw == null) cw = new CinemaWindow(wm, VrRenderer.this);
+                        else wm.focus(cw.window);
+                        cw.video.oesTex = vidTex;
+                        ensureVideoSurface();
+                        cw.loadVideo(Uri.parse(t.trim()), vidST, vidSurface);
+                        toast(activity.getString(R.string.stream_started));
+                    }
+                    @Override public void onCancel() {}
+                });
+    }
+
+    public void applyFrontCam() {
+        glQueue.add(() -> {
+            camera.front = settings.frontCam();
+            camera.stop();
+            if (cameraAllowed) camera.start();
+        });
+    }
+
+    public void vrScreenshot() {
+        glQueue.add(() -> shotRequested = true);
+    }
+
+    private void captureShot(int w, int h) {
+        int n = w * h * 4;
+        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocateDirect(n);
+        GLES20.glReadPixels(0, 0, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buf);
+        buf.rewind();
+        final Bitmap eye = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        int[] px = new int[n / 4];
+        buf.asIntBuffer().get(px);
+        for (int y = 0; y < h; y++) {
+            int srcRow = h - 1 - y;
+            for (int x = 0; x < w; x++) {
+                int argb = px[srcRow * w + x];
+                eye.setPixel(x, y, (argb & 0xFF000000) | ((argb & 0x00FF0000) >> 8)
+                        | ((argb & 0x0000FF00) << 8) | (argb & 0x000000FF));
+            }
+        }
+        new Thread(() -> {
+            boolean okSet = false;
+            try {
+                String name = "VisionPocket_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+                        .format(new Date()) + ".png";
+                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    android.content.ContentValues cv = new android.content.ContentValues();
+                    cv.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name);
+                    cv.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png");
+                    cv.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+                            Environment.DIRECTORY_PICTURES + "/VisionPocket");
+                    Uri uri = activity.getContentResolver().insert(
+                            android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv);
+                    if (uri != null) {
+                        OutputStream os = activity.getContentResolver().openOutputStream(uri);
+                        eye.compress(Bitmap.CompressFormat.PNG, 100, os);
+                        if (os != null) os.close();
+                        okSet = true;
+                    }
+                } else {
+                    File dir = new File(activity.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "VisionPocket");
+                    if (dir.mkdirs() || dir.isDirectory()) {
+                        File f = new File(dir, name);
+                        FileOutputStream fos = new FileOutputStream(f);
+                        eye.compress(Bitmap.CompressFormat.PNG, 100, fos);
+                        fos.close();
+                        okSet = true;
+                    }
+                }
+            } catch (Exception ignored) {}
+            eye.recycle();
+            final boolean ok = okSet;
+            glQueue.add(() -> toast(activity.getString(ok
+                    ? R.string.shot_saved : R.string.shot_failed)));
+        }, "vp-shot").start();
     }
 
     public void headStart() { head.start(); }

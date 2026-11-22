@@ -24,6 +24,9 @@ public class VpWindows {
         void pickVideo();
         void pickImage();
         float headYaw();
+        void openStreamDialog();
+        void applyFrontCam();
+        void vrScreenshot();
     }
 
     // ============================ Window ============================

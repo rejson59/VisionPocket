@@ -34,8 +34,8 @@ public class SettingsWindow implements WindowContent {
         window.content = this;
 
         int s = VpWindows.STRIP_PX;
-        for (int i = 0; i < 6; i++) {
-            int y = 14 + i * 118;
+        for (int i = 0; i < 7; i++) {
+            int y = 10 + i * 104;
             switch (i) {
                 case 0: chrome.add("ipd_m", 1010, y + 6 + s, 1180, y + 100 + s); chrome.add("ipd_p", 1200, y + 6 + s, 1370, y + 100 + s); break;
                 case 1: chrome.add("dist_m", 1010, y + 6 + s, 1180, y + 100 + s); chrome.add("dist_p", 1200, y + 6 + s, 1370, y + 100 + s); break;
@@ -47,9 +47,11 @@ public class SettingsWindow implements WindowContent {
                 case 3: chrome.add("pt", 700, y + 6 + s, 1370, y + 100 + s); break;
                 case 4: chrome.add("rot", 700, y + 6 + s, 1370, y + 100 + s); break;
                 case 5: chrome.add("zoom_m", 1010, y + 6 + s, 1180, y + 100 + s); chrome.add("zoom_p", 1200, y + 6 + s, 1370, y + 100 + s); break;
+                case 6: chrome.add("selfie", 700, y + 6 + s, 1370, y + 100 + s); break;
             }
         }
-        chrome.add("do_recenter", 940, 730 + s, 1370, 830 + s);
+        chrome.add("do_recenter", 620, 750 + s, 1370, 850 + s);
+        chrome.add("shot", 40, 750 + s, 580, 850 + s);
         chrome.click = b -> onClick(b.id);
 
         pBg.setColor(0xFF0E101A);
@@ -84,7 +86,8 @@ public class SettingsWindow implements WindowContent {
                 host.activity().getString(R.string.settings_resolution),
                 host.activity().getString(R.string.settings_passthrough),
                 host.activity().getString(R.string.settings_rotate),
-                host.activity().getString(R.string.settings_zoom)
+                host.activity().getString(R.string.settings_zoom),
+                host.activity().getString(R.string.settings_selfie)
         };
         String[] values = {
                 st.ipd() + " mm",
@@ -92,22 +95,23 @@ public class SettingsWindow implements WindowContent {
                 null,
                 null,
                 null,
-                String.format(Locale.US, "%.1f", st.zoom())
+                String.format(Locale.US, "%.1f", st.zoom()),
+                null
         };
-        for (int i = 0; i < 6; i++) {
-            int y = 14 + i * 118;
-            RectF row = new RectF(40, y, 1400, y + 106);
+        for (int i = 0; i < 7; i++) {
+            int y = 10 + i * 104;
+            RectF row = new RectF(40, y, 1400, y + 94);
             c.drawRoundRect(row, 24, 24, pRow);
-            c.drawText(labels[i], 70, y + 68, pLabel);
-            if (values[i] != null) c.drawText(values[i], 920, y + 70, pValue);
+            c.drawText(labels[i], 70, y + 60, pLabel);
+            if (values[i] != null) c.drawText(values[i], 920, y + 62, pValue);
         }
 
         for (Panel.Button b : p.buttons) {
             if ("do_recenter".equals(b.id)) continue;
-            int rowTop = 14, rowBot = 120;
-            for (int i = 0; i < 6; i++) {
-                int y = 14 + i * 118;
-                if (b.rect.top - s >= y && b.rect.bottom - s <= y + 112) { rowTop = y; rowBot = y + 106; break; }
+            int rowTop = 10, rowBot = 104;
+            for (int i = 0; i < 7; i++) {
+                int y = 10 + i * 104;
+                if (b.rect.top - s >= y && b.rect.bottom - s <= y + 100) { rowTop = y; rowBot = y + 94; break; }
             }
             boolean inRow = b.rect.top - s >= rowTop && b.rect.bottom - s <= rowBot;
             if (!inRow) continue;
@@ -117,6 +121,9 @@ public class SettingsWindow implements WindowContent {
             pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
             c.drawRoundRect(r, 20, 20, pBorder);
             String text = buttonLabel(b.id, st);
+            if ("selfie".equals(b.id)) {
+                text = host.activity().getString(st.frontCam() ? R.string.common_on : R.string.common_off);
+            }
             if (text.length() <= 2 && ("−".equals(text) || "+".equals(text))) {
                 c.drawText(text, r.centerX(), r.centerY() - (pSym.ascent() + pSym.descent()) / 2f, pSym);
             } else {
@@ -125,12 +132,15 @@ public class SettingsWindow implements WindowContent {
         }
 
         for (Panel.Button b : p.buttons) {
-            if (!"do_recenter".equals(b.id)) continue;
+            if (!"do_recenter".equals(b.id) && !"shot".equals(b.id)) continue;
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             c.drawRoundRect(r, 22, 22, b.hover ? pBtnHover : pBtn);
             pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
             c.drawRoundRect(r, 22, 22, pBorder);
-            HomeSceneUtil.drawCentered(c, host.activity().getString(R.string.common_recenter), r, pValue);
+            String t = "shot".equals(b.id)
+                    ? host.activity().getString(R.string.settings_shot)
+                    : host.activity().getString(R.string.common_recenter);
+            HomeSceneUtil.drawCentered(c, t, r, pValue);
         }
     }
 
@@ -139,6 +149,7 @@ public class SettingsWindow implements WindowContent {
             case "res0": return st.resIdx() == 0;
             case "res1": return st.resIdx() == 1;
             case "res2": return st.resIdx() == 2;
+            case "selfie": return st.frontCam();
             default: return false;
         }
     }
@@ -173,7 +184,12 @@ public class SettingsWindow implements WindowContent {
             case "rot": st.setRotDeg(st.rotDeg() + 90); break;
             case "zoom_m": st.setZoom(st.zoom() - 0.1f); break;
             case "zoom_p": st.setZoom(st.zoom() + 0.1f); break;
+            case "selfie":
+                st.setFrontCam(!st.frontCam());
+                host.applyFrontCam();
+                break;
             case "do_recenter": host.recenterView(); break;
+            case "shot": host.vrScreenshot(); break;
         }
         chrome.dirty = true;
     }

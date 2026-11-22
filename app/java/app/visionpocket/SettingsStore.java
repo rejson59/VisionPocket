@@ -41,6 +41,18 @@ public class SettingsStore {
     public int envMode() { return prefs.getInt("env", 0); }
     public void setEnvMode(int v) { prefs.edit().putInt("env", clamp(v, 0, 2)).apply(); }
 
+    /** Passthrough lens: false = back camera, true = front camera (selfie AR). */
+    public boolean frontCam() { return prefs.getBoolean("frontCam", false); }
+    public void setFrontCam(boolean b) { prefs.edit().putBoolean("frontCam", b).apply(); }
+
+    /** 360° projection: 0=equirect, 1=dome, 2=tiny planet. */
+    public int panoProj() { return prefs.getInt("panoProj", 0); }
+    public void setPanoProj(int v) { prefs.edit().putInt("panoProj", clamp(v, 0, 2)).apply(); }
+
+    /** Quick note text. */
+    public String note() { return prefs.getString("note", ""); }
+    public void setNote(String s) { prefs.edit().putString("note", s == null ? "" : s).apply(); }
+
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
     private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
 }
