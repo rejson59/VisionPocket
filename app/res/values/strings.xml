@@ -130,4 +130,12 @@
     <string name="game_new_best">New best: %1$d!</string>
     <string name="g2048_new">↺  New</string>
     <string name="g2048_over">No more moves — try New</string>
+    <string name="win_clock">Clock</string>
+    <string name="sw_start">Start</string>
+    <string name="sw_stop">Stop</string>
+    <string name="sw_reset">Reset</string>
+    <string name="notes_add">＋  New note</string>
+    <string name="notes_empty">No notes yet — tap “＋ New note”</string>
+    <string name="notes_empty_row">(empty)</string>
+    <string name="photos_loading">Loading…</string>
 </resources>

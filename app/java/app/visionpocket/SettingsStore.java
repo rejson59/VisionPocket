@@ -89,6 +89,10 @@ public class SettingsStore {
     public int best2048() { return prefs.getInt("best2048", 0); }
     public void setBest2048(int v) { prefs.edit().putInt("best2048", v).apply(); }
 
+    /** Sticky notes list (JSON array of strings). */
+    public String notesJson() { return prefs.getString("notesJson", "[]"); }
+    public void setNotesJson(String s) { prefs.edit().putString("notesJson", s == null ? "[]" : s).apply(); }
+
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
     private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
 }

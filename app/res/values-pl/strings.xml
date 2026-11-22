@@ -127,4 +127,12 @@
     <string name="game_new_best">Nowy rekord: %1$d!</string>
     <string name="g2048_new">↺  Nowa</string>
     <string name="g2048_over">Brak ruchów — spróbuj Nowa</string>
+    <string name="win_clock">Zegar</string>
+    <string name="sw_start">Start</string>
+    <string name="sw_stop">Stop</string>
+    <string name="sw_reset">Reset</string>
+    <string name="notes_add">＋  Nowa</string>
+    <string name="notes_empty">Brak notatek — stuknij „＋ Nowa”</string>
+    <string name="notes_empty_row">(pusta)</string>
+    <string name="photos_loading">Wczytywanie…</string>
 </resources>

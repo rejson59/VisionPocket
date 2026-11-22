@@ -293,7 +293,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         head.setRecenterListener(this);
 
         String[] ids = {"recenter", "cinema", "photos", "pano", "mirror", "notes", "apps",
-                "viz", "game", "g2048", "env", "settings"};
+                "viz", "clock", "game", "g2048", "env", "settings"};
         dock = new Panel(0f, -0.45f, -1.6f, 0f, 1.45f, 0.17f, 1000f);
         for (int i = 0; i < ids.length; i++) {
             int x0 = 40 + i * 116;
@@ -1024,7 +1024,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         border.setColor(dock.hovered ? 0xFF8FA3C8 : 0xFF2A3046);
         c.drawRoundRect(2, 2, p.pw - 2, p.ph - 2, 50, 50, border);
 
-        String[] icons = {"⟲", "🎬", "🖼", "360°", "▣", "📝", "🚀", "🎵", "🎯", "▦", "🌍", "⚙"};
+        String[] icons = {"⟲", "🎬", "🖼", "360°", "▣", "📝", "🚀", "🎵", "🕒", "🎯", "▦", "🌍", "⚙"};
         Paint icon = new Paint(Paint.ANTI_ALIAS_FLAG);
         icon.setColor(0xFFE8ECF5);
         icon.setTextSize(56f);
@@ -1379,6 +1379,9 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             case "viz":
                 activity.ensureRecordAudio();
                 new VisualizerWindow(wm, this);
+                break;
+            case "clock":
+                new ClockWindow(wm, this);
                 break;
             case "game":
                 gameWin = new GameWindow(wm, this);

@@ -21,7 +21,7 @@ lub pięknych środowisk wirtualnych.
 steel accent; **no neon, no glow spam**. Environments reworked: **Studio** (clean
 dark gradient) and **Dusk** (soft, desaturated horizon) replace the old flashy ones.
 
-## Features / Funkcje (v1.5)
+## Features / Funkcje (v1.6)
 
 - 🖼️ **Spatial windows (Windows-style)** — apps open as floating windows with a title
   bar, ✕ close and — minimize; bring to front, cascade placement, minimized windows
@@ -70,6 +70,11 @@ dark gradient) and **Dusk** (soft, desaturated horizon) replace the old flashy o
 - ⚙️ **Settings window** — IPD, lens distortion strength, resolution, passthrough
   on/off/rotation/zoom
 - 🌐 **PL + EN**, boot chime + click sounds, status bar (time · FPS · battery)
+- 🕒 **Clock window** — analog + digital clock, local date, built-in stopwatch
+- 🖼️ **Photo gallery** — multi-page thumbnail grid (up to 60 photos), tap to view
+  full-size, ‹ › pages, 📂 to add more
+- 📝 **Sticky notes** — multiple notes now (was one), tap to edit with the 3D
+  keyboard, ✕ to delete, old single note is migrated automatically
 - 🎯 **Focus game** — soft white targets appear around your space; look & tap to
   pop them, chain combos in 60-second rounds, best score kept
 - 🔢 **2048** — the classic, neutral tiles, arrow controls, best score kept
@@ -91,7 +96,7 @@ dark gradient) and **Dusk** (soft, desaturated horizon) replace the old flashy o
 
 ## Install / Instalacja
 
-1. Download `release/VisionPocket-v1.5.apk` (Android 8.0+ / API 26+) — or grab it from the [Releases](../../releases) page.
+1. Download `release/VisionPocket-v1.6.apk` (Android 8.0+ / API 26+) — or grab it from the [Releases](../../releases) page.
 2. Allow "install unknown apps" for your file manager, then tap the APK.
 3. Run → **START VR** → grant camera permission (or "Start without camera").
 4. Insert the phone into any phone-VR headset, **landscape** orientation.
@@ -142,6 +147,7 @@ app/
     LauncherWindow.java        installed-apps launcher window
     NotesWindow.java           quick notes window
     VisualizerWindow.java      music visualizer window
+    ClockWindow.java           analog clock, date, stopwatch
     GameWindow.java            "Focus" reaction game (spatial targets)
     Game2048Window.java        2048 in a window
     KeyboardWindow.java        3D QWERTY input dialog (shift key)
@@ -160,7 +166,7 @@ tools/
   build_apk.py                 full APK build pipeline (no Gradle, no SDK download)
   vp-debug.keystore            debug signing key (passphrase: visionpocket)
 release/
-  VisionPocket-v1.5.apk        signed, ready-to-install build
+  VisionPocket-v1.6.apk        signed, ready-to-install build
 ```
 
 ## Build from source / Budowanie ze źródeł
@@ -168,8 +174,8 @@ release/
 See [BUILDING.md](BUILDING.md). Short version:
 
 ```bash
-python3 tools/build_apk.py --version-name 1.5 --version-code 7
-# -> release/VisionPocket-v1.5.apk
+python3 tools/build_apk.py --version-name 1.6 --version-code 8
+# -> release/VisionPocket-v1.6.apk
 ```
 
 The pipeline (aapt2 → javac → D8 → aligned zip → apksigner) needs **no Android SDK
