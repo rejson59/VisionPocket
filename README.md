@@ -21,7 +21,7 @@ lub pięknych środowisk wirtualnych.
 steel accent; **no neon, no glow spam**. Environments reworked: **Studio** (clean
 dark gradient) and **Dusk** (soft, desaturated horizon) replace the old flashy ones.
 
-## Features / Funkcje (v1.7)
+## Features / Funkcje (v1.8)
 
 - 🖼️ **Spatial windows (Windows-style)** — apps open as floating windows with a title
   bar, ✕ close and — minimize; bring to front, cascade placement, minimized windows
@@ -70,6 +70,10 @@ dark gradient) and **Dusk** (soft, desaturated horizon) replace the old flashy o
 - ⚙️ **Settings window** — IPD, lens distortion strength, resolution, passthrough
   on/off/rotation/zoom
 - 🌐 **PL + EN**, boot chime + click sounds, status bar (time · FPS · battery)
+- 🌐 **Shared room (Wi-Fi multiplayer)** — phones on the same Wi-Fi share the
+  same window layout: open, move, scale and minimize windows together, see
+  each other\'s gaze as small diamond markers. One phone hosts, others join by
+  IP (dock → 🌐). No internet needed — pure LAN.
 - 💾 **Settings backup / restore** — export all settings, notes and desktop
   session to a JSON file and restore them later or on another phone
   (Settings → Kopia ustawień → ⬆/⬇)
@@ -97,11 +101,11 @@ dark gradient) and **Dusk** (soft, desaturated horizon) replace the old flashy o
 - 🎯 **IPD calibration wizard** — line pattern test with −/+ and it remembers
 - ⌨ **Keyboard shift key**, ✨ **click haptics** (toggle), **🛡 crash-guard** —
   the app recovers gracefully and keeps your settings
-- 📦 **Tiny APK (~0.27 MB)** — includes two games — native Android (Java + OpenGL ES 2.0), instant startup
+- 📦 **Tiny APK (~0.29 MB)** — includes two games + LAN multiplayer — native Android (Java + OpenGL ES 2.0), instant startup
 
 ## Install / Instalacja
 
-1. Download `release/VisionPocket-v1.7.apk` (Android 8.0+ / API 26+) — or grab it from the [Releases](../../releases) page.
+1. Download `release/VisionPocket-v1.8.apk` (Android 8.0+ / API 26+) — or grab it from the [Releases](../../releases) page.
 2. Allow "install unknown apps" for your file manager, then tap the APK.
 3. Run → **START VR** → grant camera permission (or "Start without camera").
 4. Insert the phone into any phone-VR headset, **landscape** orientation.
@@ -155,6 +159,8 @@ app/
     ClockWindow.java           analog clock, date, stopwatch
     GameWindow.java            "Focus" reaction game (spatial targets)
     Game2048Window.java        2048 in a window
+    NetService.java            JSON-line TCP mesh for the shared room
+    NetWindow.java             host/join/leave room UI
     Shaders.java               all GLSL sources (extracted from the renderer)
     KeyboardWindow.java        3D QWERTY input dialog (shift key)
     CalibrationWindow.java     IPD calibration wizard
@@ -172,7 +178,7 @@ tools/
   build_apk.py                 full APK build pipeline (no Gradle, no SDK download)
   vp-debug.keystore            debug signing key (passphrase: visionpocket)
 release/
-  VisionPocket-v1.7.apk        signed, ready-to-install build
+  VisionPocket-v1.8.apk        signed, ready-to-install build
 ```
 
 ## Build from source / Budowanie ze źródeł
@@ -180,8 +186,8 @@ release/
 See [BUILDING.md](BUILDING.md). Short version:
 
 ```bash
-python3 tools/build_apk.py --version-name 1.7 --version-code 9
-# -> release/VisionPocket-v1.7.apk
+python3 tools/build_apk.py --version-name 1.8 --version-code 10
+# -> release/VisionPocket-v1.8.apk
 ```
 
 The pipeline (aapt2 → javac → D8 → aligned zip → apksigner) needs **no Android SDK

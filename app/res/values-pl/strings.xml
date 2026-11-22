@@ -142,4 +142,20 @@
     <string name="bk_restored">Przywrócono %1$d ustawień — zrestartuj dla pełnego efektu</string>
     <string name="bk_failed">Nie udało się — czy to plik VisionPocket?</string>
     <string name="err_render">Zakłócenie renderowania — próbuję kontynuować</string>
+    <string name="win_net">Wspólny pokój</string>
+    <string name="net_host">⌂  Hostuj</string>
+    <string name="net_join">⇥  Dołącz</string>
+    <string name="net_leave">✕  Opuść</string>
+    <string name="net_hint">Telefony w tej samej sieci Wi-Fi dzielą układ okien i widzą swoje spojrzenia. Hostuj na jednym telefonie, dołącz z pozostałych po jego IP.</string>
+    <string name="net_role_off">Brak połączenia</string>
+    <string name="net_role_host">Hostujesz</string>
+    <string name="net_role_client">Połączono</string>
+    <string name="net_connecting">Łączenie…</string>
+    <string name="net_peers">Uczestnicy</string>
+    <string name="net_peer_none">Jeszcze nikogo</string>
+    <string name="net_ip_hint">Wpisz IP hosta (np. 192.168.1.42)</string>
+    <string name="net_hosting_toast">Pokój otwarty — podaj innym swoje IP</string>
+    <string name="net_joined">Dołączono do wspólnego pokoju</string>
+    <string name="net_left">Opuściłeś pokój</string>
+    <string name="net_fail">Nie udało się połączyć — sprawdź IP i Wi-Fi</string>
 </resources>

@@ -138,6 +138,17 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private GameWindow gameWin;
     private Game2048Window game2048Win;
 
+    // --- shared room (Wi-Fi multiplayer) ---
+    private NetService net;
+    private NetWindow netWin;
+    private boolean netApplying = false;
+    private final java.util.HashSet<String> netClosedKeys = new java.util.HashSet<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, float[]> avatars
+            = new java.util.concurrent.ConcurrentHashMap<>();
+    private String lastNetStateSent = "";
+    private final float[] netM = new float[16], netM2 = new float[16];
+    private java.nio.FloatBuffer peerBuf;
+
     // --- window inertia ---
     private VpWindows.Window inertWin;
     private float inertVX, inertVY, inertVZ;
@@ -176,12 +187,33 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         this.wm = new VpWindows(this);
         head.setRecenterListener(this);
 
+        peerBuf = java.nio.ByteBuffer.allocateDirect(12 * 4).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer();
+        net = new NetService();
+        String selfName = android.os.Build.MODEL == null ? "VP" : android.os.Build.MODEL;
+        if (selfName.length() > 24) selfName = selfName.substring(0, 24);
+        net.setSelfName(selfName);
+        net.setListener(new NetService.Listener() {
+            @Override public void onPeersChanged() {
+                glQueue.add(() -> { if (netWin != null) netWin.refresh(); });
+            }
+            @Override public void onMessage(org.json.JSONObject m) {
+                glQueue.add(() -> handleNetMessage(m));
+            }
+            @Override public void onStatus(String st) {
+                glQueue.add(() -> {
+                    if ("fail".equals(st)) toast(activity.getString(R.string.net_fail));
+                    else if (st != null && st.startsWith("connected")) toast(activity.getString(R.string.net_joined));
+                    if (netWin != null) netWin.refresh();
+                });
+            }
+        });
+
         String[] ids = {"recenter", "cinema", "photos", "pano", "mirror", "notes", "apps",
-                "viz", "clock", "game", "g2048", "env", "settings"};
-        dock = new Panel(0f, -0.45f, -1.6f, 0f, 1.45f, 0.17f, 1000f);
+                "viz", "clock", "game", "g2048", "net", "env", "settings"};
+        dock = new Panel(0f, -0.45f, -1.6f, 0f, 1.6f, 0.17f, 1000f);
         for (int i = 0; i < ids.length; i++) {
-            int x0 = 40 + i * 116;
-            dock.add(ids[i], x0, 30, x0 + 92, 130);
+            int x0 = 40 + i * 112;
+            dock.add(ids[i], x0, 30, x0 + 88, 130);
         }
         dock.hook = this::drawDock;
 
@@ -332,6 +364,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     private void drawFrame(GL10 gl) {
         long now = System.nanoTime();
+
+        // shared room: send gaze + full window state periodically
+        if (net.active && !netApplying && net.snapshot().size() > 0) {
+            if (frameCount % 10 == 0) netSendGaze();
+            if (frameCount % 45 == 0) netSyncState();
+        }
         float dt = 0.016f;
         if (lastNs > 0) {
             dt = (now - lastNs) / 1.0e9f;
@@ -465,6 +503,18 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 tp.renderIfNeeded();
                 drawTexturedQuad(tp.tex, tp.cx, tp.cy, tp.cz, tp.yaw,
                         tp.width, tp.height, 1f, 1f, pv, 0f);
+            }
+
+            // peer avatars (fresh gaze markers)
+            long nowMs = System.currentTimeMillis();
+            for (java.util.Map.Entry<String, float[]> e : avatars.entrySet()) {
+                float[] v = e.getValue();
+                if (nowMs - v[2] > 3000) { avatars.remove(e.getKey()); continue; }
+                float dist = 2.6f;
+                float px = (float) Math.sin(v[0]) * (float) Math.cos(v[1]) * dist;
+                float py = (float) Math.sin(v[1]) * dist + 0.05f;
+                float pz = -(float) Math.cos(v[0]) * (float) Math.cos(v[1]) * dist;
+                drawDiamond(px, py, pz, pv);
             }
 
             // dock
@@ -704,6 +754,165 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         }
     }
 
+    // ================= shared room =================
+
+    private void netSendGaze() {
+        try {
+            float[] rot = head.rotation();
+            net.send(new org.json.JSONObject()
+                    .put("t", "G")
+                    .put("n", net.selfName())
+                    .put("y", (double) headYaw())
+                    .put("p", (double) Math.asin(Math.max(-1f, Math.min(1f, -rot[9])))));
+        } catch (Exception ignored) {}
+    }
+
+    private void netSyncState() {
+        String st = netStateJson();
+        if (st.isEmpty() || st.equals(lastNetStateSent)) return;
+        lastNetStateSent = st;
+        try { net.send(new org.json.JSONObject(st)); } catch (Exception ignored) {}
+    }
+
+    private String netStateJson() {
+        try {
+            org.json.JSONObject root = new org.json.JSONObject();
+            root.put("t", "S");
+            org.json.JSONArray arr = new org.json.JSONArray();
+            for (VpWindows.Window w : wm.list) {
+                if ("net".equals(w.kind) || "start".equals(w.kind) || "kb".equals(w.kind)
+                        || "calib".equals(w.kind)) continue;
+                org.json.JSONObject o = new org.json.JSONObject();
+                o.put("k", w.kind);
+                o.put("x", (double) w.ax); o.put("y", (double) w.ay); o.put("z", (double) w.az);
+                o.put("a", (double) w.ayaw); o.put("s", (double) w.scale); o.put("m", w.minimized);
+                arr.put(o);
+            }
+            root.put("w", arr);
+            org.json.JSONObject d = new org.json.JSONObject();
+            d.put("x", (double) dock.cx); d.put("y", (double) dock.cy);
+            d.put("z", (double) dock.cz); d.put("a", (double) dock.yaw);
+            root.put("d", d);
+            return root.toString();
+        } catch (Exception e) { return ""; }
+    }
+
+    private void netSendClose(String kind) {
+        if (!net.active || net.snapshot().size() == 0) return;
+        netClosedKeys.add(kind);
+        lastNetStateSent = "";
+        try { net.send(new org.json.JSONObject().put("t", "C").put("k", kind)); }
+        catch (Exception ignored) {}
+    }
+
+    private void handleNetMessage(org.json.JSONObject m) {
+        try {
+            String t = m.optString("t");
+            if ("G".equals(t)) {
+                avatars.put(m.optString("n", "?"), new float[]{
+                        (float) m.optDouble("y", 0), (float) m.optDouble("p", 0),
+                        System.currentTimeMillis()});
+                return;
+            }
+            if ("O".equals(t)) {
+                String k = m.optString("k");
+                netClosedKeys.remove(k);   // explicit open overrides an earlier close
+                if (wm.find(k) == null) {
+                    netApplying = true;
+                    openWindow(k);
+                    netApplying = false;
+                }
+                return;
+            }
+            if ("C".equals(t)) {
+                String k = m.optString("k");
+                netClosedKeys.add(k);
+                lastNetStateSent = "";
+                VpWindows.Window w = wm.find(k);
+                if (w != null) wm.close(w);
+                return;
+            }
+            if ("S".equals(t)) {
+                netApplying = true;
+                org.json.JSONArray arr = m.optJSONArray("w");
+                if (arr != null) {
+                    for (int i = 0; i < arr.length(); i++) {
+                        org.json.JSONObject o = arr.getJSONObject(i);
+                        String k = o.optString("k");
+                        if (netClosedKeys.contains(k)) continue;
+                        VpWindows.Window w = wm.find(k);
+                        if (w == null) { openWindow(k); w = wm.find(k); }
+                        if (w == null) continue;
+                        w.ax = (float) o.optDouble("x", w.ax);
+                        w.ay = (float) o.optDouble("y", w.ay);
+                        w.az = (float) o.optDouble("z", w.az);
+                        w.ayaw = (float) o.optDouble("a", w.ayaw);
+                        w.applyScale((float) o.optDouble("s", w.scale));
+                        w.layout();
+                        w.setMinimized(o.optBoolean("m", w.minimized));
+                    }
+                }
+                org.json.JSONObject d = m.optJSONObject("d");
+                if (d != null) {
+                    dock.cx = (float) d.optDouble("x", dock.cx);
+                    dock.cy = (float) d.optDouble("y", dock.cy);
+                    dock.cz = (float) d.optDouble("z", dock.cz);
+                    dock.yaw = (float) d.optDouble("a", dock.yaw);
+                }
+                netApplying = false;
+            }
+        } catch (Exception ignored) {
+            netApplying = false;
+        }
+    }
+
+    public void netHost() {
+        glQueue.add(() -> {
+            netClosedKeys.clear();
+            net.startHost();
+            toast(activity.getString(R.string.net_hosting_toast));
+            if (netWin != null) netWin.refresh();
+        });
+    }
+
+    public void netJoin(String ip) {
+        if (ip == null || ip.trim().isEmpty()) return;
+        netClosedKeys.clear();
+        net.join(ip);
+    }
+
+    public void netLeave() {
+        glQueue.add(() -> {
+            net.stop();
+            avatars.clear();
+            toast(activity.getString(R.string.net_left));
+            if (netWin != null) netWin.refresh();
+        });
+    }
+
+    public NetService net() { return net; }
+
+    private void drawDiamond(float x, float y, float z, float[] pv) {
+        float s = 0.05f;
+        peerBuf.position(0);
+        peerBuf.put(x).put(y + s).put(z);
+        peerBuf.put(x + s).put(y).put(z);
+        peerBuf.put(x).put(y - s).put(z);
+        peerBuf.put(x - s).put(y).put(z);
+        peerBuf.position(0);
+        Matrix.setIdentityM(netM, 0);
+        Matrix.rotateM(netM, 0, (float) Math.toDegrees(Math.atan2(x, -z)), 0f, 1f, 0f);
+        Matrix.multiplyMM(netM2, 0, pv, 0, netM, 0);
+        GLES20.glUseProgram(pColor);
+        GLES20.glUniformMatrix4fv(uColorMVP, 1, false, netM2, 0);
+        GLES20.glUniform4f(uColorColor, 0.85f, 0.87f, 0.92f, 0.85f);
+        GLES20.glEnableVertexAttribArray(aColorPos);
+        GLES20.glVertexAttribPointer(aColorPos, 3, GLES20.GL_FLOAT, false, 12, peerBuf);
+        GLES20.glLineWidth(6f);
+        GLES20.glDrawArrays(GLES20.GL_LINE_LOOP, 0, 4);
+        GLES20.glLineWidth(1f);
+    }
+
     private void drawLaser(float[] dir, float len, float[] pv) {
         laserBuf.position(0);
         laserBuf.put(0f).put(0f).put(0f);
@@ -920,7 +1129,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         border.setColor(dock.hovered ? 0xFF8FA3C8 : 0xFF2A3046);
         c.drawRoundRect(2, 2, p.pw - 2, p.ph - 2, 50, 50, border);
 
-        String[] icons = {"⟲", "🎬", "🖼", "360°", "▣", "📝", "🚀", "🎵", "🕒", "🎯", "▦", "🌍", "⚙"};
+        String[] icons = {"⟲", "🎬", "🖼", "360°", "▣", "📝", "🚀", "🎵", "🕒", "🎯", "▦", "🌐", "🌍", "⚙"};
         Paint icon = new Paint(Paint.ANTI_ALIAS_FLAG);
         icon.setColor(0xFFE8ECF5);
         icon.setTextSize(56f);
@@ -1235,6 +1444,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private void routeButton(VpWindows.Window w, String id) {
         if ("chrome_close".equals(id)) {
             wm.close(w);
+            netSendClose(w.kind);
             return;
         }
         if ("chrome_min".equals(id)) {
@@ -1279,6 +1489,9 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             case "clock":
                 new ClockWindow(wm, this);
                 break;
+            case "net":
+                netWin = new NetWindow(wm, this);
+                break;
             case "game":
                 gameWin = new GameWindow(wm, this);
                 break;
@@ -1317,7 +1530,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         try {
             org.json.JSONArray arr = new org.json.JSONArray();
             for (VpWindows.Window w : wm.list) {
-                if ("start".equals(w.kind) || "kb".equals(w.kind) || "calib".equals(w.kind)) continue;
+                if ("start".equals(w.kind) || "kb".equals(w.kind) || "calib".equals(w.kind)
+                        || "net".equals(w.kind)) continue;
                 org.json.JSONObject o = new org.json.JSONObject();
                 o.put("k", w.kind);
                 o.put("x", (double) w.ax); o.put("y", (double) w.ay); o.put("z", (double) w.az);
@@ -1387,7 +1601,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     public boolean back() {
         VpWindows.Window w = wm.focusedWindow();
         if (w != null) {
-            glQueue.add(() -> wm.close(w));
+            glQueue.add(() -> { wm.close(w); netSendClose(w.kind); });
             return true;
         }
         return false;

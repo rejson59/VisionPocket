@@ -145,4 +145,20 @@
     <string name="bk_restored">Restored %1$d settings — restart for full effect</string>
     <string name="bk_failed">Backup failed — is it a VisionPocket file?</string>
     <string name="err_render">Render hiccup — trying to continue</string>
+    <string name="win_net">Shared room</string>
+    <string name="net_host">⌂  Host</string>
+    <string name="net_join">⇥  Join</string>
+    <string name="net_leave">✕  Leave</string>
+    <string name="net_hint">Phones on the same Wi-Fi share window layout and see each other\'s gaze. Host on one phone, join from the others by its IP.</string>
+    <string name="net_role_off">Not connected</string>
+    <string name="net_role_host">Hosting</string>
+    <string name="net_role_client">Joined</string>
+    <string name="net_connecting">Connecting…</string>
+    <string name="net_peers">Peers</string>
+    <string name="net_peer_none">Nobody else yet</string>
+    <string name="net_ip_hint">Type the host IP (e.g. 192.168.1.42)</string>
+    <string name="net_hosting_toast">Room hosted — tell others your IP</string>
+    <string name="net_joined">Joined the shared room</string>
+    <string name="net_left">Left the room</string>
+    <string name="net_fail">Could not connect — check the IP and Wi-Fi</string>
 </resources>
