@@ -184,6 +184,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         this.settings = new SettingsStore(activity);
         settings.migrateDistortion();
         this.head = new HeadTracker(activity);
+        this.head.attach(this.settings);
         this.camera = new CameraPipeline(activity, this);
         this.wm = new VpWindows(this);
         head.setRecenterListener(this);
@@ -1912,7 +1913,10 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     @Override public MainActivity activity() { return activity; }
     @Override public void toast(String msg) { setMsg(msg, 2600); }
     @Override public float fps() { return fps; }
-    @Override public void recenterView() { head.recenter(); }
+    @Override public void recenterView() {
+        head.refreshMount(true);
+        head.recenter();
+    }
     @Override public float headYaw() {
         float[] f = head.forward(new float[3]);
         return (float) Math.atan2(f[0], -f[2]);
@@ -1973,6 +1977,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 + " · dist " + settings.distortionPct() + "%"
                 + " · IPD " + settings.ipd() + "mm"
                 + " · env " + settings.envMode() + " · rot " + settings.rotDeg()
+                + " · viewRot " + settings.viewRot()
                 + " · " + Math.round(fps) + " fps";
     }
 

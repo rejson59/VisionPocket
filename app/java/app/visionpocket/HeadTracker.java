@@ -2,6 +2,8 @@ package app.visionpocket;
 
 import android.content.Context;
 import android.hardware.Sensor;
+import android.view.Display;
+import android.view.Surface;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
@@ -17,6 +19,7 @@ public class HeadTracker implements SensorEventListener {
     public interface RecenterListener { void onRecenter(float deltaYaw); }
 
     private final SensorManager sensorManager;
+    private final Context appCtx;
     private Sensor sensor;
     public boolean hasSensor = false;
 
@@ -36,17 +39,59 @@ public class HeadTracker implements SensorEventListener {
 
     private RecenterListener listener;
 
+    // mount correction: screen frame (as held) -> device frame, plus user roll steps
+    private final float[] mount = new float[16];
+    private final float[] tmp4 = new float[16];
+    private int dispRot = -1;
+    private int extraQuarters = -1;
+    private SettingsStore settings;
+    private int events = 0;
+
     public HeadTracker(Context ctx) {
+        appCtx = ctx;
         sensorManager = (SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
         Matrix.setIdentityM(recenterM, 0);
         Matrix.setIdentityM(rotation, 0);
         Matrix.setIdentityM(view, 0);
+        Matrix.setIdentityM(mount, 0);
         sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         if (sensor == null) sensor = sensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR);
         hasSensor = sensor != null;
     }
 
     public void setRecenterListener(RecenterListener l) { listener = l; }
+
+    /** Gives the tracker access to persisted view-rotation steps. */
+    public void attach(SettingsStore st) { settings = st; refreshMount(true); }
+
+    /** Rebuilds the mount matrix (display orientation + user roll steps). */
+    public void refreshMount(boolean force) {
+        int dr = -1;
+        try {
+            Display d = ((android.app.Activity) (ctx())).getWindowManager().getDefaultDisplay();
+            dr = d.getRotation();
+        } catch (Exception ignored) {}
+        int ex = settings == null ? 0 : settings.viewRot();
+        if (!force && dr == dispRot && ex == extraQuarters) return;
+        dispRot = dr;
+        extraQuarters = ex;
+        Matrix.setIdentityM(mount, 0);
+        // sensor frame is tied to the NATURAL (portrait) orientation; the phone is
+        // held landscape, so remap screen->device before going to world coords
+        if (dr == Surface.ROTATION_90) {          // top of device to the right
+            mount[0] = 0; mount[1] = 1;           // screen X = device +Y
+            mount[4] = -1; mount[5] = 0;          // screen Y = device -X
+        } else if (dr == Surface.ROTATION_270) {  // top of device to the left
+            mount[0] = 0; mount[1] = -1;          // screen X = device -Y
+            mount[4] = 1; mount[5] = 0;           // screen Y = device +X
+        } else if (dr == Surface.ROTATION_180) {
+            mount[0] = -1;
+            mount[5] = -1;
+        }
+        if (ex != 0) Matrix.rotateM(mount, 0, ex * 90f, 0f, 0f, 1f);
+    }
+
+    private Context ctx() { return appCtx; }
 
     public void start() {
         if (sensor != null) sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME);
@@ -88,11 +133,13 @@ public class HeadTracker implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.values.length < 4) return;
+        if (++events % 30 == 0) refreshMount(false);
         SensorManager.getRotationMatrixFromVector(R3, event.values);
         GlUtil.mat3mul(G, R3, tmp3);
         GlUtil.mat3to4(tmp3, dg4);
-        // target = recenter * dg
-        Matrix.multiplyMM(target, 0, recenterM, 0, dg4, 0);
+        // target = recenter * dg * mount
+        Matrix.multiplyMM(tmp4, 0, dg4, 0, mount, 0);
+        Matrix.multiplyMM(target, 0, recenterM, 0, tmp4, 0);
         // exponential smoothing toward the sensor reading (reduces jitter)
         for (int i = 0; i < 16; i++) {
             rotation[i] += (target[i] - rotation[i]) * SMOOTH;

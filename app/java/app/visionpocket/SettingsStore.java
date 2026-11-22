@@ -19,6 +19,10 @@ public class SettingsStore {
     /** Lens distortion strength percent (0..150). */
     public int distortionPct() { return prefs.getInt("distortion", 0); }
 
+    /** Extra view mount roll, in 90-degree steps (user calibration). */
+    public int viewRot() { return prefs.getInt("viewRot", 0); }
+    public void setViewRot(int v) { prefs.edit().putInt("viewRot", ((v % 4) + 4) % 4).apply(); }
+
     /** One-time migration: v1.9.0 shipped an untested lens-warp default (100%) that
      *  produced broken output on real hardware; start flat and let the user tune. */
     public void migrateDistortion() {

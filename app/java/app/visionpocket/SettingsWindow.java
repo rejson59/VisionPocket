@@ -57,10 +57,11 @@ public class SettingsWindow implements WindowContent {
                 case 9: chrome.add("bkx", 700, y + 4 + s, 1020, y + 90 + s); chrome.add("bki", 1050, y + 4 + s, 1370, y + 90 + s); break;
             }
         }
-        chrome.add("shot", 40, 1020 + s, 340, 1116 + s);
-        chrome.add("calib", 360, 1020 + s, 660, 1116 + s);
-        chrome.add("diag", 680, 1020 + s, 980, 1116 + s);
-        chrome.add("do_recenter", 1000, 1020 + s, 1370, 1116 + s);
+        chrome.add("shot", 40, 1020 + s, 290, 1116 + s);
+        chrome.add("calib", 310, 1020 + s, 560, 1116 + s);
+        chrome.add("diag", 580, 1020 + s, 830, 1116 + s);
+        chrome.add("do_recenter", 850, 1020 + s, 1100, 1116 + s);
+        chrome.add("rot90", 1120, 1020 + s, 1370, 1116 + s);
         chrome.click = b -> onClick(b.id);
 
         pBg.setColor(0xFF101113);
@@ -138,7 +139,8 @@ public class SettingsWindow implements WindowContent {
         }
 
         for (Panel.Button b : p.buttons) {
-            if (!"shot".equals(b.id) && !"calib".equals(b.id) && !"diag".equals(b.id) && !"do_recenter".equals(b.id)) continue;
+            if (!"shot".equals(b.id) && !"calib".equals(b.id) && !"diag".equals(b.id)
+                    && !"do_recenter".equals(b.id) && !"rot90".equals(b.id)) continue;
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             c.drawRoundRect(r, 20, 20, b.hover ? pBtnHover : pBtn);
             pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
@@ -147,6 +149,7 @@ public class SettingsWindow implements WindowContent {
             if ("shot".equals(b.id)) t = host.activity().getString(R.string.settings_shot);
             else if ("calib".equals(b.id)) t = "🎯  " + host.activity().getString(R.string.calib_open);
             else if ("diag".equals(b.id)) t = "🩺  " + host.activity().getString(R.string.win_diag);
+            else if ("rot90".equals(b.id)) t = "🔄 ×" + host.settings().viewRot();
             else t = host.activity().getString(R.string.common_recenter);
             HomeSceneUtil.drawCentered(c, t, r, pValue);
         }
@@ -215,6 +218,10 @@ public class SettingsWindow implements WindowContent {
             case "shot": host.vrScreenshot(); break;
             case "calib": host.openCalibration(); break;
             case "diag": host.openDiagnostics(); break;
+            case "rot90":
+                st.setViewRot(st.viewRot() + 1);
+                host.recenterView();
+                break;
             case "bkx": host.exportSettings(); break;
             case "bki": host.importSettings(); break;
         }
