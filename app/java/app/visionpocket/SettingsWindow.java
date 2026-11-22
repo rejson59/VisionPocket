@@ -34,7 +34,7 @@ public class SettingsWindow implements WindowContent {
         window.content = this;
 
         int s = VpWindows.STRIP_PX;
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 10; i++) {
             int y = 8 + i * 98;
             switch (i) {
                 case 0: chrome.add("ipd_m", 1010, y + 4 + s, 1180, y + 90 + s); chrome.add("ipd_p", 1200, y + 4 + s, 1370, y + 90 + s); break;
@@ -54,16 +54,17 @@ public class SettingsWindow implements WindowContent {
                     chrome.add("perf2", 1120, y + 4 + s, 1310, y + 90 + s);
                     break;
                 case 8: chrome.add("haptics", 700, y + 4 + s, 1370, y + 90 + s); break;
+                case 9: chrome.add("bkx", 700, y + 4 + s, 1020, y + 90 + s); chrome.add("bki", 1050, y + 4 + s, 1370, y + 90 + s); break;
             }
         }
-        chrome.add("shot", 40, 928 + s, 340, 1024 + s);
-        chrome.add("calib", 360, 928 + s, 660, 1024 + s);
-        chrome.add("diag", 680, 928 + s, 980, 1024 + s);
-        chrome.add("do_recenter", 1000, 928 + s, 1370, 1024 + s);
+        chrome.add("shot", 40, 1020 + s, 340, 1116 + s);
+        chrome.add("calib", 360, 1020 + s, 660, 1116 + s);
+        chrome.add("diag", 680, 1020 + s, 980, 1116 + s);
+        chrome.add("do_recenter", 1000, 1020 + s, 1370, 1116 + s);
         chrome.click = b -> onClick(b.id);
 
         pBg.setColor(0xFF101113);
-        pRow.setColor(0x2A1D2130);
+        pRow.setColor(0x2A1A1C21);
         pBtn.setColor(0xFF1F2126);
         pBtnHover.setColor(0xFF2E323A);
         pBtnActive.setColor(0xFF343945);
@@ -97,7 +98,8 @@ public class SettingsWindow implements WindowContent {
                 host.activity().getString(R.string.settings_zoom),
                 host.activity().getString(R.string.settings_selfie),
                 host.activity().getString(R.string.settings_perf),
-                host.activity().getString(R.string.settings_haptics)
+                host.activity().getString(R.string.settings_haptics),
+                host.activity().getString(R.string.settings_backup)
         };
         String[] values = {
                 st.ipd() + " mm",
@@ -106,7 +108,7 @@ public class SettingsWindow implements WindowContent {
                 String.format(Locale.US, "%.1f", st.zoom()),
                 null, null, null
         };
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 10; i++) {
             int y = 8 + i * 98;
             RectF row = new RectF(40, y, 1400, y + 90);
             c.drawRoundRect(row, 22, 22, pRow);
@@ -117,7 +119,7 @@ public class SettingsWindow implements WindowContent {
         for (Panel.Button b : p.buttons) {
             if ("shot".equals(b.id) || "calib".equals(b.id) || "diag".equals(b.id) || "do_recenter".equals(b.id)) continue;
             int rowTop = 8, rowBot = 98;
-            for (int i = 0; i < 9; i++) {
+            for (int i = 0; i < 10; i++) {
                 int y = 8 + i * 98;
                 if (b.rect.top - s >= y && b.rect.bottom - s <= y + 94) { rowTop = y; rowBot = y + 90; break; }
             }
@@ -178,6 +180,8 @@ public class SettingsWindow implements WindowContent {
             case "perf1": return "⚖";
             case "perf2": return "⚡";
             case "haptics": return host.activity().getString(st.haptics() ? R.string.common_on : R.string.common_off);
+            case "bkx": return "⬆  " + host.activity().getString(R.string.bk_export);
+            case "bki": return "⬇  " + host.activity().getString(R.string.bk_import);
             default: return "";
         }
     }
@@ -211,6 +215,8 @@ public class SettingsWindow implements WindowContent {
             case "shot": host.vrScreenshot(); break;
             case "calib": host.openCalibration(); break;
             case "diag": host.openDiagnostics(); break;
+            case "bkx": host.exportSettings(); break;
+            case "bki": host.importSettings(); break;
         }
         chrome.dirty = true;
     }

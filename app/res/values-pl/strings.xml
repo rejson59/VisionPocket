@@ -135,4 +135,11 @@
     <string name="notes_empty">Brak notatek — stuknij „＋ Nowa”</string>
     <string name="notes_empty_row">(pusta)</string>
     <string name="photos_loading">Wczytywanie…</string>
+    <string name="settings_backup">Kopia ustawień</string>
+    <string name="bk_export">Zapisz</string>
+    <string name="bk_import">Wczytaj</string>
+    <string name="bk_saved">Kopia zapisana</string>
+    <string name="bk_restored">Przywrócono %1$d ustawień — zrestartuj dla pełnego efektu</string>
+    <string name="bk_failed">Nie udało się — czy to plik VisionPocket?</string>
+    <string name="err_render">Zakłócenie renderowania — próbuję kontynuować</string>
 </resources>

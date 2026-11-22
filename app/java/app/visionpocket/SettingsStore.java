@@ -93,6 +93,50 @@ public class SettingsStore {
     public String notesJson() { return prefs.getString("notesJson", "[]"); }
     public void setNotesJson(String s) { prefs.edit().putString("notesJson", s == null ? "[]" : s).apply(); }
 
+    /** Serializes every preference into a JSON string (backup/restore). */
+    public String exportJson() {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            java.util.Map<String, ?> all = prefs.getAll();
+            for (java.util.Map.Entry<String, ?> e : all.entrySet()) {
+                Object v = e.getValue();
+                try {
+                    if (v instanceof Boolean) o.put(e.getKey(), (Boolean) v);
+                    else if (v instanceof Integer) o.put(e.getKey(), (Integer) v);
+                    else if (v instanceof Long) o.put(e.getKey(), (Long) v);
+                    else if (v instanceof Float) o.put(e.getKey(), (Float) v);
+                    else if (v instanceof String) o.put(e.getKey(), (String) v);
+                    else if (v instanceof java.util.Set) o.put(e.getKey(), new org.json.JSONArray((java.util.Set<?>) v));
+                } catch (Exception ignored) {}
+            }
+            return o.toString();
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    /** Restores preferences from a JSON string; returns how many keys were applied. */
+    public int importJson(String json) {
+        org.json.JSONObject o;
+        try { o = new org.json.JSONObject(json); } catch (Exception e) { return -1; }
+        android.content.SharedPreferences.Editor ed = prefs.edit();
+        int n = 0;
+        java.util.Iterator<String> it = o.keys();
+        while (it.hasNext()) {
+            String k = it.next();
+            Object v = o.opt(k);
+            try {
+                if (v instanceof Boolean) { ed.putBoolean(k, (Boolean) v); n++; }
+                else if (v instanceof Integer) { ed.putInt(k, (Integer) v); n++; }
+                else if (v instanceof Long) { ed.putLong(k, (Long) v); n++; }
+                else if (v instanceof Double) { ed.putFloat(k, (float) (double) (Double) v); n++; }
+                else if (v instanceof String) { ed.putString(k, (String) v); n++; }
+            } catch (Exception ignored) {}
+        }
+        ed.apply();
+        return n;
+    }
+
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
     private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
 }

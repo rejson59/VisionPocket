@@ -138,4 +138,11 @@
     <string name="notes_empty">No notes yet — tap “＋ New note”</string>
     <string name="notes_empty_row">(empty)</string>
     <string name="photos_loading">Loading…</string>
+    <string name="settings_backup">Settings backup</string>
+    <string name="bk_export">Save</string>
+    <string name="bk_import">Load</string>
+    <string name="bk_saved">Backup saved</string>
+    <string name="bk_restored">Restored %1$d settings — restart for full effect</string>
+    <string name="bk_failed">Backup failed — is it a VisionPocket file?</string>
+    <string name="err_render">Render hiccup — trying to continue</string>
 </resources>

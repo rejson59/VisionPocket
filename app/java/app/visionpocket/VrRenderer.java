@@ -166,123 +166,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private final float[] headPvL = new float[16], headPvR = new float[16];
     private final float[] tmpM = new float[16], tmpM2 = new float[16], tmpM3 = new float[16];
 
-    // shaders
-    private static final String VS_TEX =
-            "uniform mat4 uMVP;\n" +
-            "attribute vec4 aPos;\n" +
-            "attribute vec2 aUV;\n" +
-            "varying vec2 vUV;\n" +
-            "void main(){ gl_Position = uMVP * aPos; vUV = aUV; }\n";
-
-    private static final String MODE_GLSL =
-            "vec2 applyMode(vec2 uv, float m){\n" +
-            "  if (m > 0.5 && m < 1.5) {\n" +
-            "    uv.y = 0.5 + (uv.y - 0.5) * abs(uv.y - 0.5) * 2.0;\n" +
-            "  } else if (m > 1.5) {\n" +
-            "    float v = 1.0 - uv.y;\n" +
-            "    uv.y = 0.5 + (v - 0.5) * abs(v - 0.5) * 2.0;\n" +
-            "    uv.x = 1.0 - uv.x;\n" +
-            "  }\n" +
-            "  return uv;\n" +
-            "}\n";
-
-    private static final String FS_PANEL =
-            "precision mediump float;\n" +
-            "uniform sampler2D uTex;\n" +
-            "uniform float uAlpha;\n" +
-            "uniform float uMode;\n" +
-            "varying vec2 vUV;\n" +
-            MODE_GLSL +
-            "void main(){ vec4 c = texture2D(uTex, applyMode(vUV, uMode)); gl_FragColor = vec4(c.rgb, c.a * uAlpha); }\n";
-
-    private static final String FS_CAM =
-            "#extension GL_OES_EGL_image_external : require\n" +
-            "precision mediump float;\n" +
-            "uniform samplerExternalOES uCam;\n" +
-            "uniform float uAngle;\n" +
-            "uniform float uZoom;\n" +
-            "uniform float uOverscan;\n" +
-            "uniform float uMode;\n" +
-            "uniform float uSide;\n" +
-            "uniform float uBright;\n" +
-            "varying vec2 vUV;\n" +
-            MODE_GLSL +
-            "void main(){\n" +
-            "  vec2 c = vUV - vec2(0.5);\n" +
-            "  float cs = cos(uAngle);\n" +
-            "  float sn = sin(uAngle);\n" +
-            "  c = vec2(c.x*cs - c.y*sn, c.x*sn + c.y*cs);\n" +
-            "  c = c / (uZoom * uOverscan);\n" +
-            "  vec2 suv = vec2(0.5) + c;\n" +
-            "  if (abs(uSide) > 0.5) { suv.x = (suv.x + (uSide < 0.0 ? 0.0 : 1.0)) * 0.5; }\n" +
-            "  vec4 col = texture2D(uCam, applyMode(suv, uMode));\n" +
-            "  gl_FragColor = vec4(col.rgb * uBright, col.a);\n" +
-            "}\n";
-
-    private static final String FS_SPACE =
-            "precision mediump float;\n" +
-            "uniform float uTime;\n" +
-            "varying vec2 vUV;\n" +
-            "void main(){\n" +
-            "  vec2 uv = vUV;\n" +
-            "  vec3 col = mix(vec3(0.047, 0.050, 0.058), vec3(0.030, 0.032, 0.037), uv.y);\n" +
-            "  float vig = smoothstep(1.15, 0.30, distance(uv, vec2(0.5, 0.42)));\n" +
-            "  col *= 0.74 + 0.26 * vig;\n" +
-            "  col += vec3(0.055, 0.058, 0.066) * pow(max(0.0, 1.0 - distance(uv, vec2(0.5, 0.94)) * 1.7), 3.0);\n" +
-            "  gl_FragColor = vec4(col, 1.0);\n" +
-            "}\n";
-
-    private static final String FS_HORIZON =
-            "precision mediump float;\n" +
-            "uniform float uTime;\n" +
-            "varying vec2 vUV;\n" +
-            "void main(){\n" +
-            "  vec2 uv = vUV;\n" +
-            "  float horizon = 0.55;\n" +
-            "  vec3 col;\n" +
-            "  if (uv.y > horizon) {\n" +
-            "    col = mix(vec3(0.135, 0.145, 0.165), vec3(0.35, 0.34, 0.335), smoothstep(horizon, 0.78, uv.y));\n" +
-            "    col = mix(col, vec3(0.118, 0.122, 0.138), smoothstep(0.78, 1.0, uv.y));\n" +
-            "    col += vec3(0.10, 0.085, 0.07) * exp(-abs(uv.y - horizon) * 14.0) * exp(-abs(uv.x - 0.5) * 3.0);\n" +
-            "  } else {\n" +
-            "    col = mix(vec3(0.055, 0.055, 0.060), vec3(0.030, 0.031, 0.034), smoothstep(horizon, 0.0, uv.y));\n" +
-            "  }\n" +
-            "  gl_FragColor = vec4(col, 1.0);\n" +
-            "}\n";
-
-    private static final String VS_DIST =
-            "uniform float uHalf;\n" +
-            "attribute vec4 aPos;\n" +
-            "varying vec2 vPos;\n" +
-            "void main(){ vPos = aPos.xy; gl_Position = vec4(aPos.x * 0.5 + uHalf, aPos.y, 0.0, 1.0); }\n";
-
-    private static final String FS_DIST =
-            "precision mediump float;\n" +
-            "uniform sampler2D uScene;\n" +
-            "uniform vec2 uEyeCenter;\n" +
-            "uniform float uAspect;\n" +
-            "uniform float uK1;\n" +
-            "uniform float uK2;\n" +
-            "varying vec2 vPos;\n" +
-            "void main(){\n" +
-            "  vec2 q = vec2(vPos.x * uAspect, vPos.y);\n" +
-            "  float r2 = dot(q, q);\n" +
-            "  float f = 1.0 + uK1 * r2 + uK2 * r2 * r2;\n" +
-            "  vec2 uv = uEyeCenter + (q * f) / vec2(uAspect, 1.0) * 0.5;\n" +
-            "  uv.x = clamp(uv.x, uEyeCenter.x - 0.499, uEyeCenter.x + 0.499);\n" +
-            "  uv.y = clamp(uv.y, 0.001, 0.999);\n" +
-            "  gl_FragColor = texture2D(uScene, uv);\n" +
-            "}\n";
-
-    private static final String VS_COLOR =
-            "uniform mat4 uMVP;\n" +
-            "attribute vec4 aPos;\n" +
-            "void main(){ gl_Position = uMVP * aPos; }\n";
-
-    private static final String FS_COLOR =
-            "precision mediump float;\n" +
-            "uniform vec4 uColor;\n" +
-            "void main(){ gl_FragColor = uColor; }\n";
+    // shader sources live in Shaders.java
 
     public VrRenderer(MainActivity activity) {
         this.activity = activity;
@@ -326,7 +210,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glDisable(GLES20.GL_CULL_FACE);
         GLES20.glClearColor(0f, 0f, 0f, 1f);
 
-        pPanel = GlUtil.createProgram(VS_TEX, FS_PANEL);
+        pPanel = GlUtil.createProgram(Shaders.VS_TEX, Shaders.FS_PANEL);
         uPanelMVP = GLES20.glGetUniformLocation(pPanel, "uMVP");
         aPanelPos = GLES20.glGetAttribLocation(pPanel, "aPos");
         aPanelUV = GLES20.glGetAttribLocation(pPanel, "aUV");
@@ -334,7 +218,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         uPanelAlpha = GLES20.glGetUniformLocation(pPanel, "uAlpha");
         uPanelMode = GLES20.glGetUniformLocation(pPanel, "uMode");
 
-        pCam = GlUtil.createProgram(VS_TEX, FS_CAM);
+        pCam = GlUtil.createProgram(Shaders.VS_TEX, Shaders.FS_CAM);
         uCamMVP = GLES20.glGetUniformLocation(pCam, "uMVP");
         aCamPos = GLES20.glGetAttribLocation(pCam, "aPos");
         aCamUV = GLES20.glGetAttribLocation(pCam, "aUV");
@@ -346,19 +230,19 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         uCamSide = GLES20.glGetUniformLocation(pCam, "uSide");
         uCamBright = GLES20.glGetUniformLocation(pCam, "uBright");
 
-        pEnvSpace = GlUtil.createProgram(VS_TEX, FS_SPACE);
+        pEnvSpace = GlUtil.createProgram(Shaders.VS_TEX, Shaders.FS_SPACE);
         uSpaceMVP = GLES20.glGetUniformLocation(pEnvSpace, "uMVP");
         aSpacePos = GLES20.glGetAttribLocation(pEnvSpace, "aPos");
         aSpaceUV = GLES20.glGetAttribLocation(pEnvSpace, "aUV");
         uSpaceTime = GLES20.glGetUniformLocation(pEnvSpace, "uTime");
 
-        pEnvHorizon = GlUtil.createProgram(VS_TEX, FS_HORIZON);
+        pEnvHorizon = GlUtil.createProgram(Shaders.VS_TEX, Shaders.FS_HORIZON);
         uHorMVP = GLES20.glGetUniformLocation(pEnvHorizon, "uMVP");
         aHorPos = GLES20.glGetAttribLocation(pEnvHorizon, "aPos");
         aHorUV = GLES20.glGetAttribLocation(pEnvHorizon, "aUV");
         uHorTime = GLES20.glGetUniformLocation(pEnvHorizon, "uTime");
 
-        pDist = GlUtil.createProgram(VS_DIST, FS_DIST);
+        pDist = GlUtil.createProgram(Shaders.VS_DIST, Shaders.FS_DIST);
         aDistPos = GLES20.glGetAttribLocation(pDist, "aPos");
         uDistScene = GLES20.glGetUniformLocation(pDist, "uScene");
         uDistEyeCenter = GLES20.glGetUniformLocation(pDist, "uEyeCenter");
@@ -367,7 +251,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         uDistK1 = GLES20.glGetUniformLocation(pDist, "uK1");
         uDistK2 = GLES20.glGetUniformLocation(pDist, "uK2");
 
-        pColor = GlUtil.createProgram(VS_COLOR, FS_COLOR);
+        pColor = GlUtil.createProgram(Shaders.VS_COLOR, Shaders.FS_COLOR);
         uColorMVP = GLES20.glGetUniformLocation(pColor, "uMVP");
         aColorPos = GLES20.glGetAttribLocation(pColor, "aPos");
         uColorColor = GLES20.glGetUniformLocation(pColor, "uColor");
@@ -421,6 +305,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     }
 
     private int frameCount = 0;
+    private int frameErrors = 0;
 
     @Override
     public void onDrawFrame(GL10 gl) {
@@ -435,6 +320,17 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         }
         if (++frameCount % 120 == 0) saveSession();
 
+        try {
+            drawFrame(gl);
+        } catch (Exception e) {
+            frameErrors++;
+            if (frameErrors == 1 || frameErrors % 900 == 0) {
+                activity.runOnUiThread(() -> toast(activity.getString(R.string.err_render)));
+            }
+        }
+    }
+
+    private void drawFrame(GL10 gl) {
         long now = System.nanoTime();
         float dt = 0.016f;
         if (lastNs > 0) {
@@ -1845,6 +1741,10 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     @Override public void pickVideo() { activity.runOnUiThread(() -> activity.pickVideo(false)); }
     @Override public void pickImage() { activity.runOnUiThread(() -> activity.pickImage(false)); }
+
+    @Override public void exportSettings() { activity.runOnUiThread(() -> activity.exportSettings()); }
+
+    @Override public void importSettings() { activity.runOnUiThread(() -> activity.importSettings()); }
 
     // ================= CameraPipeline.Listener =================
 

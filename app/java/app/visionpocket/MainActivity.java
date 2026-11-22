@@ -18,6 +18,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Toast;
 import android.os.Vibrator;
 import android.os.VibrationEffect;
 
@@ -249,6 +250,27 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) {}
     }
 
+    // ================= settings backup =================
+
+    public void exportSettings() {
+        try {
+            Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("application/json");
+            i.putExtra(Intent.EXTRA_TITLE, "visionpocket-backup.json");
+            startActivityForResult(i, 20);
+        } catch (Exception ignored) {}
+    }
+
+    public void importSettings() {
+        try {
+            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("*/*");
+            startActivityForResult(i, 21);
+        } catch (Exception ignored) {}
+    }
+
     // ================= screen mirroring =================
 
     public void startMirrorFlow() {
@@ -281,6 +303,38 @@ public class MainActivity extends Activity {
             renderer.onProjectionResult(resultCode, data);
             return;
         }
+        if (requestCode == 20) {
+            try {
+                Uri u = data.getData();
+                java.io.OutputStream os = getContentResolver().openOutputStream(u);
+                os.write(settingsStore.exportJson().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                os.close();
+                toast(getString(R.string.bk_saved));
+            } catch (Exception e) {
+                toast(getString(R.string.bk_failed));
+            }
+            return;
+        }
+        if (requestCode == 21) {
+            try {
+                java.io.InputStream is = getContentResolver().openInputStream(data.getData());
+                java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = is.read(buf)) > 0) bo.write(buf, 0, n);
+                is.close();
+                int cnt = settingsStore.importJson(bo.toString("UTF-8"));
+                if (cnt >= 0) {
+                    toast(getString(R.string.bk_restored, cnt));
+                    if (glView != null) glView.queueEvent(() -> renderer.applyResolution());
+                } else {
+                    toast(getString(R.string.bk_failed));
+                }
+            } catch (Exception e) {
+                toast(getString(R.string.bk_failed));
+            }
+            return;
+        }
         Uri u = data.getData();
         if (u == null) return;
         try {
@@ -297,6 +351,10 @@ public class MainActivity extends Activity {
     }
 
     // ================= sounds / misc =================
+
+    private void toast(String m) {
+        try { Toast.makeText(this, m, Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {}
+    }
 
     public void playChime() {
         try {

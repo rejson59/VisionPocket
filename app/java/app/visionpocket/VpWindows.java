@@ -23,6 +23,8 @@ public class VpWindows {
         void applyResolution();
         void pickVideo();
         void pickImage();
+        void exportSettings();
+        void importSettings();
         float headYaw();
         void openStreamDialog();
         void applyFrontCam();
