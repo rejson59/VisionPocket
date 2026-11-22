@@ -1514,6 +1514,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     public void onVrStarted() {
         glQueue.add(() -> {
+            head.refreshMount(true);   // gravity-calibrate for how the phone sits now
             loadSession();
             if (settings.autoRecenter()) {
                 new android.os.Handler(android.os.Looper.getMainLooper())
@@ -1914,7 +1915,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     @Override public void toast(String msg) { setMsg(msg, 2600); }
     @Override public float fps() { return fps; }
     @Override public void recenterView() {
-        head.refreshMount(true);
+        head.refreshMount(false);   // refresh user roll steps only — keep gravity cal
         head.recenter();
     }
     @Override public float headYaw() {
@@ -1978,7 +1979,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 + " · IPD " + settings.ipd() + "mm"
                 + " · env " + settings.envMode() + " · rot " + settings.rotDeg()
                 + " · viewRot " + settings.viewRot()
-                + " · dispRot " + head.displayRotation()
+                + " · mount " + (head.mountCalibrated() ? "ok" : "raw")
                 + " · " + Math.round(fps) + " fps";
     }
 

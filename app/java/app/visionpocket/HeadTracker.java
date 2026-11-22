@@ -2,8 +2,7 @@ package app.visionpocket;
 
 import android.content.Context;
 import android.hardware.Sensor;
-import android.view.Display;
-import android.view.Surface;
+import android.hardware.SensorEvent;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
@@ -39,13 +38,16 @@ public class HeadTracker implements SensorEventListener {
 
     private RecenterListener listener;
 
-    // display-orientation remap (canonical SensorManager table) + user roll steps
+    // Gravity-calibrated head mount (no display conventions involved):
+    // "up" comes from the accelerometer in the DEVICE frame, "back" is out of
+    // the screen, "right" = up x back (forced by orthonormality, so no mirror
+    // ambiguity). The only possible residual error is a 180-degree upside-down
+    // insert, correctable with the user roll steps (rot90 button).
     private final float[] mount = new float[16];
+    private final float[] calibB = new float[16];   // last gravity calibration
     private final float[] tmp4 = new float[16];
-    private final float[] R2 = new float[9];
-    private int remapX = SensorManager.AXIS_X;
-    private int remapY = SensorManager.AXIS_Y;
-    private int dispRot = -1;
+    private final float[] acc = new float[3];
+    private boolean accValid = false;
     private int extraQuarters = -1;
     private SettingsStore settings;
     private int events = 0;
@@ -57,6 +59,7 @@ public class HeadTracker implements SensorEventListener {
         Matrix.setIdentityM(rotation, 0);
         Matrix.setIdentityM(view, 0);
         Matrix.setIdentityM(mount, 0);
+        Matrix.setIdentityM(calibB, 0);
         sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         if (sensor == null) sensor = sensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR);
         hasSensor = sensor != null;
@@ -67,44 +70,54 @@ public class HeadTracker implements SensorEventListener {
     /** Gives the tracker access to persisted view-rotation steps. */
     public void attach(SettingsStore st) { settings = st; refreshMount(true); }
 
-    /** Rebuilds the head-frame mapping: canonical display remap + user roll steps. */
+    /** Rebuilds the head mount: gravity calibration (only when forced) + user roll steps. */
     public void refreshMount(boolean force) {
-        int dr = -1;
-        try {
-            Display d = ((android.app.Activity) (ctx())).getWindowManager().getDefaultDisplay();
-            dr = d.getRotation();
-        } catch (Exception ignored) {}
         int ex = settings == null ? 0 : settings.viewRot();
-        if (!force && dr == dispRot && ex == extraQuarters) return;
-        dispRot = dr;
+        if (!force && ex == extraQuarters) return;
         extraQuarters = ex;
-        // Canonical remap table (SensorManager docs; the same one compass apps use
-        // so the needle matches what the user sees):
-        //   ROTATION_0   -> (AXIS_X, AXIS_Y)
-        //   ROTATION_90  -> (AXIS_Y, AXIS_MINUS_X)   // landscape, top to the LEFT
-        //   ROTATION_180 -> (AXIS_MINUS_X, AXIS_MINUS_Y)
-        //   ROTATION_270 -> (AXIS_MINUS_Y, AXIS_X)   // landscape, top to the RIGHT
-        switch (dr) {
-            case Surface.ROTATION_90:
-                remapX = SensorManager.AXIS_Y; remapY = SensorManager.AXIS_MINUS_X; break;
-            case Surface.ROTATION_180:
-                remapX = SensorManager.AXIS_MINUS_X; remapY = SensorManager.AXIS_MINUS_Y; break;
-            case Surface.ROTATION_270:
-                remapX = SensorManager.AXIS_MINUS_Y; remapY = SensorManager.AXIS_X; break;
-            default:
-                remapX = SensorManager.AXIS_X; remapY = SensorManager.AXIS_Y;
+        if (force && accValid) {
+            // up = accelerometer direction (world up expressed in device frame)
+            float ax = acc[0], ay = acc[1], az = acc[2];
+            float len = (float) Math.sqrt(ax * ax + ay * ay + az * az);
+            if (len > 5f && len < 15f) {
+                // build the calibrated basis into calibB, then copy to mount
+                ax /= len; ay /= len; az /= len;
+                // back = out of the screen (+Z device)
+                float bx = 0f, by = 0f, bz = 1f;
+                // right = up x back (right-handed triple: right x up = back)
+                float rx = ay * bz - az * by;
+                float ry = az * bx - ax * bz;
+                float rz = ax * by - ay * bx;
+                float rl = (float) Math.sqrt(rx * rx + ry * ry + rz * rz);
+                if (rl > 0.1f) {
+                    rx /= rl; ry /= rl; rz /= rl;
+                    // re-orthogonalize up = back x right
+                    float ux = by * rz - bz * ry;
+                    float uy = bz * rx - bx * rz;
+                    float uz = bx * ry - by * rx;
+                    // column-major 4x4 with columns (right, up, back)
+                    System.arraycopy(calibB, 0, mount, 0, 16);
+                    mount[0] = rx; mount[1] = ry; mount[2] = rz;
+                    mount[4] = ux; mount[5] = uy; mount[6] = uz;
+                    mount[8] = bx; mount[9] = by; mount[10] = bz;
+                    System.arraycopy(mount, 0, calibB, 0, 16);
+                }
+            }
+        } else {
+            System.arraycopy(calibB, 0, mount, 0, 16);
         }
-        Matrix.setIdentityM(mount, 0);
         if (ex != 0) Matrix.rotateM(mount, 0, ex * 90f, 0f, 0f, 1f);
     }
 
-    /** Display rotation constant currently used for the remap (diagnostics). */
-    public int displayRotation() { return dispRot; }
+    /** Whether the gravity calibration produced a usable mount (diagnostics). */
+    public boolean mountCalibrated() { return accValid; }
 
     private Context ctx() { return appCtx; }
 
     public void start() {
         if (sensor != null) sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME);
+        Sensor grav = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        if (grav != null) sensorManager.registerListener(this, grav, SensorManager.SENSOR_DELAY_GAME);
     }
 
     public void stop() {
@@ -142,15 +155,19 @@ public class HeadTracker implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            if (event.values.length >= 3) {
+                acc[0] = event.values[0];
+                acc[1] = event.values[1];
+                acc[2] = event.values[2];
+                accValid = true;
+            }
+            return;
+        }
         if (event.values.length < 4) return;
         if (++events % 30 == 0) refreshMount(false);
         SensorManager.getRotationMatrixFromVector(R3, event.values);
-        // head frame = DISPLAYED screen frame (right, up, back): remap with the
-        // canonical table, then android-world -> GL, then user roll steps
-        if (!SensorManager.remapCoordinateSystem(R3, remapX, remapY, R2)) {
-            System.arraycopy(R3, 0, R2, 0, R2.length);
-        }
-        GlUtil.mat3mul(G, R2, tmp3);
+        GlUtil.mat3mul(G, R3, tmp3);
         GlUtil.mat3to4(tmp3, dg4);
         // target = recenter * dg * mount
         Matrix.multiplyMM(tmp4, 0, dg4, 0, mount, 0);
