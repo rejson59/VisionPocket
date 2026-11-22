@@ -1,0 +1,16 @@
+# Build outputs
+build/
+out/
+gen/
+*.apk
+!release/*.apk
+*.idsig
+local.properties
+
+# Toolchain caches (kept outside the repo by default)
+.vptools/
+
+# OS / editor
+.DS_Store
+*.iml
+.idea/
