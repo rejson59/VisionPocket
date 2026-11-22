@@ -1,8 +1,11 @@
 package app.visionpocket;
 
+import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.SurfaceTexture;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
@@ -24,10 +27,13 @@ import javax.microedition.khronos.opengles.GL10;
 /**
  * VisionPocket spatial engine:
  * - stereoscopic rendering with barrel-distortion correction
- * - world backgrounds: camera passthrough, procedural space, horizon grid
+ * - world backgrounds: camera passthrough, procedural space, horizon grid,
+ *   360° equirectangular panoramas (photo or video)
  * - Windows-style spatial windows (open, grab, move, depth, scale, minimize)
+ * - curved cinema screen (Quest-style cylindrical mesh)
+ * - screen mirroring via MediaProjection
+ * - adaptive eye resolution to hold frame rate
  * - hand-style touch interaction mapped onto window surfaces
- * - gaze + tap with hover feedback
  */
 public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         CameraPipeline.Listener, HeadTracker.RecenterListener {
@@ -35,6 +41,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private static final float FOVY_DEG = 78f;
     private static final float PASSTHROUGH_DIST = 8f;
     private static final float OVERSCAN = 1.4f;
+    private static final float PANO_RADIUS = 30f;
 
     private final MainActivity activity;
     private final SettingsStore settings;
@@ -57,17 +64,40 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private boolean camFrameEver = false;
     private boolean cameraAllowed = false;
 
-    // --- video ---
+    // --- cinema video ---
     private int vidTex = -1;
     private SurfaceTexture vidST;
     private Surface vidSurface;
     private boolean vidFrame = false;
 
-    // --- FBO ---
+    // --- panorama 360 ---
+    public static final int PANO_OFF = 0, PANO_IMAGE = 1, PANO_VIDEO = 2;
+    private int panoMode = PANO_OFF;
+    private int panoTex = -1;
+    private Mesh panoMesh;
+    private int panoVidTex = -1;
+    private SurfaceTexture panoST;
+    private Surface panoSurface;
+    private MediaPlayer panoMp;
+    private boolean panoFrame = false;
+    private boolean panoVideoReady = false;
+
+    // --- screen mirror ---
+    private int mirrorTex = -1;
+    private SurfaceTexture mirrorST;
+    private Surface mirrorSurface;
+    private boolean mirrorFrame = false;
+    private int mirrorState = 0; // 0 off, 1 live
+    private MirrorWindow mirrorWin;
+
+    // --- FBO + adaptive resolution ---
     private int fbo = -1, fboTex = -1, fboDepth = -1;
     private int fboW = 8, fboH = 8, eyeW = 8, eyeH = 8, scrW = 8, scrH = 8;
     private float eyeAspect = 1f;
     private final float[] proj = new float[16];
+    private static final float[] ADAPT_STEPS = {0.55f, 0.65f, 0.75f, 0.85f, 1.0f};
+    private int adaptIdx = ADAPT_STEPS.length - 1;
+    private float lowTimer = 0f, highTimer = 0f, runTime = 0f;
 
     // --- world-locked background anchor ---
     private float ptxCx = 0f, ptxCy = 0f, ptxCz = -PASSTHROUGH_DIST, ptxYaw = 0f;
@@ -95,6 +125,11 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private final float[] hr = new float[3], hu = new float[3], hf = new float[3];
     private float downX, downY, lastX, lastY;
     private float gestureScale0 = 1f, pinchInit = 1f, gestureLastMidY = 0f;
+    private float velPx = 0f, velPy = 0f;
+
+    // --- window inertia (physics) ---
+    private VpWindows.Window inertWin;
+    private float inertVX, inertVY, inertVZ;
 
     // --- timing ---
     private long lastNs = 0;
@@ -229,12 +264,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         this.wm = new VpWindows(this);
         head.setRecenterListener(this);
 
-        dock = new Panel(0f, -0.45f, -1.6f, 0f, 1.0f, 0.17f, 1000f);
-        dock.add("recenter", 25, 30, 125, 130);
-        dock.add("cinema", 145, 30, 245, 130);
-        dock.add("photos", 265, 30, 365, 130);
-        dock.add("env", 385, 30, 485, 130);
-        dock.add("settings", 505, 30, 605, 130);
+        dock = new Panel(0f, -0.45f, -1.6f, 0f, 1.3f, 0.17f, 1000f);
+        String[] ids = {"recenter", "cinema", "photos", "pano", "mirror", "env", "settings"};
+        for (int i = 0; i < ids.length; i++) {
+            int x0 = 22 + i * 118;
+            dock.add(ids[i], x0, 30, x0 + 96, 130);
+        }
         dock.hook = this::drawDock;
 
         statusBar = new Panel(0f, 0.42f, -1.05f, 0f, 0.85f, 0.12f, 1000f);
@@ -242,6 +277,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
         reticle = new Panel(0f, 0f, -0.7f, 0f, 0.07f, 0.07f, 1400f);
         reticle.hook = this::drawReticle;
+
+        MirrorService.stopListener = () -> glQueue.add(() -> {
+            mirrorState = 0;
+            if (mirrorWin != null) mirrorWin.screen.visible = false;
+            toast(activity.getString(R.string.toast_mirror_stopped));
+        });
     }
 
     // ================= lifecycle =================
@@ -302,12 +343,20 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         camera.attach(camST);
 
         vidTex = GlUtil.createOesTexture();
+        panoVidTex = GlUtil.createOesTexture();
+        panoMesh = Mesh.sphere(PANO_RADIUS, 48, 32);
 
         // GL textures are invalidated with the context
         dock.tex = -1; dock.dirty = true;
         statusBar.tex = -1; statusBar.dirty = true;
         reticle.tex = -1; reticle.dirty = true;
-        for (VpWindows.Window w : wm.list) for (VpWindows.Window.Part pt : w.parts) { pt.panel.tex = -1; pt.panel.dirty = true; }
+        panoTex = -1;
+        panoST = null; panoSurface = null; panoMp = null; panoVideoReady = false;
+        mirrorTex = GlUtil.createOesTexture();
+        mirrorST = null; mirrorSurface = null;
+        for (VpWindows.Window w : wm.list) {
+            for (VpWindows.Window.Part pt : w.parts) { pt.panel.tex = -1; pt.panel.dirty = true; }
+        }
 
         if (cameraAllowed) camera.start();
     }
@@ -338,13 +387,14 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         }
 
         long now = System.nanoTime();
+        float dt = 0.016f;
         if (lastNs > 0) {
-            float dt = (now - lastNs) / 1.0e9f;
+            dt = (now - lastNs) / 1.0e9f;
             if (dt > 0f && dt < 1f) fps = fps * 0.9f + (1f / dt) * 0.1f;
         }
         lastNs = now;
-
-        float fade = 0f; // reserved for transitions
+        runTime += dt;
+        adaptResolution(dt);
 
         long upMs = SystemClock.uptimeMillis();
         if (upMs - lastStatusMs >= 1000) {
@@ -353,20 +403,20 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             lastStatusMs = upMs;
         }
         wm.update();
+        updateInertia(dt);
 
-        // --- gaze hover (also drives highlights when not touching) ---
+        // --- gaze hover ---
         clearAllHover();
         VpWindows.Hit hoverHit = raycastGaze();
         boolean somethingHovered = hoverHit != null && hoverHit.panel.hoveredButton() != null;
 
-        // --- reticle mode from touch state ---
+        // --- reticle mode ---
         if (touchMode == TM_IDLE) {
             reticleMode = 0;
             reticleWorld = false;
             reticleScale += ((somethingHovered ? 1.6f : 1f) - reticleScale) * 0.3f;
         } else {
             reticleMode = grabWin != null ? 2 : 1;
-            // hand cursor sits on the window surface along the gaze ray
             float[] rot = head.rotation();
             handWorldX = grabDist * -rot[8];
             handWorldY = grabDist * -rot[9];
@@ -377,7 +427,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             reticleScale += (1f - reticleScale) * 0.3f;
         }
 
-        // --- camera frames ---
+        // --- external frames ---
         if (camera.frameAvailable) {
             camera.frameAvailable = false;
             try { camST.updateTexImage(); } catch (Exception ignored) {}
@@ -385,6 +435,14 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         if (vidFrame && vidST != null) {
             vidFrame = false;
             try { vidST.updateTexImage(); } catch (Exception ignored) {}
+        }
+        if (panoFrame && panoST != null && panoMode == PANO_VIDEO) {
+            panoFrame = false;
+            try { panoST.updateTexImage(); } catch (Exception ignored) {}
+        }
+        if (mirrorFrame && mirrorST != null && mirrorState == 1) {
+            mirrorFrame = false;
+            try { mirrorST.updateTexImage(); } catch (Exception ignored) {}
         }
 
         // --- scene into FBO, once per eye ---
@@ -409,17 +467,23 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             float[] headPv = eye == 0 ? headPvL : headPvR;
             Matrix.multiplyMM(headPv, 0, proj, 0, eyeT, 0);
 
-            // background world
-            int envMode = settings.envMode();
-            boolean passthroughLive = envMode == 0 && settings.passthrough()
-                    && cameraAllowed && camFrameEver;
-            if (passthroughLive) {
-                drawCamQuad(camTex, ptxCx, ptxCy, ptxCz, ptxYaw, ptxW, ptxH,
-                        settings.rotDeg(), settings.zoom(), OVERSCAN, pv);
-            } else if (envMode == 2) {
-                drawEnvQuad(pEnvHorizon, uHorMVP, aHorPos, aHorUV, uHorTime, pv);
+            // background world (panorama replaces environment)
+            VpWindows.Window panoW = wm.find("pano");
+            boolean panoVisible = panoMode != PANO_OFF && panoW != null && !panoW.minimized;
+            if (panoVisible) {
+                drawPano(pv);
             } else {
-                drawEnvQuad(pEnvSpace, uSpaceMVP, aSpacePos, aSpaceUV, uSpaceTime, pv);
+                int envMode = settings.envMode();
+                boolean passthroughLive = envMode == 0 && settings.passthrough()
+                        && cameraAllowed && camFrameEver;
+                if (passthroughLive) {
+                    drawCamQuad(camTex, ptxCx, ptxCy, ptxCz, ptxYaw, ptxW, ptxH,
+                            settings.rotDeg(), settings.zoom(), OVERSCAN, pv);
+                } else if (envMode == 2) {
+                    drawEnvQuad(pEnvHorizon, uHorMVP, aHorPos, aHorUV, uHorTime, pv);
+                } else {
+                    drawEnvQuad(pEnvSpace, uSpaceMVP, aSpacePos, aSpaceUV, uSpaceTime, pv);
+                }
             }
 
             // spatial windows, far -> near
@@ -431,7 +495,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                     Panel p = pt.panel;
                     if (!p.visible) continue;
                     if (p.oes) {
-                        drawCamQuad(p.oesTex, p.cx, p.cy, p.cz, p.yaw, p.width, p.height, 0f, 1f, 1f, pv);
+                        if (p.mesh != null) {
+                            drawOesMesh(p.oesTex, p, pv);
+                        } else {
+                            drawCamQuad(p.oesTex, p.cx, p.cy, p.cz, p.yaw, p.width, p.height,
+                                    0f, 1f, 1f, pv);
+                        }
                     } else {
                         p.renderIfNeeded();
                         drawTexturedQuad(p.tex, p.cx, p.cy, p.cz, p.yaw, p.width, p.height, 1f, 1f, pv);
@@ -439,7 +508,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 }
             }
 
-            // dock (world, grabbable) — typically nearest
+            // dock
             dock.renderIfNeeded();
             drawTexturedQuad(dock.tex, dock.cx, dock.cy, dock.cz, dock.yaw,
                     dock.width, dock.height, 1f, 0.96f, pv);
@@ -480,19 +549,35 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             GLES20.glUniform2f(uDistEyeCenter, eye == 0 ? 0.25f : 0.75f, 0.5f);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         }
+    }
 
-        // --- fade overlay ---
-        if (fade > 0.003f) {
-            GLES20.glEnable(GLES20.GL_BLEND);
-            GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-            GLES20.glUseProgram(pColor);
-            Matrix.setIdentityM(tmpM, 0);
-            GLES20.glUniformMatrix4fv(uColorMVP, 1, false, tmpM, 0);
-            GLES20.glUniform4f(uColorColor, 0f, 0f, 0f, fade);
-            GLES20.glEnableVertexAttribArray(aColorPos);
-            GLES20.glVertexAttribPointer(aColorPos, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
-            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
-            GLES20.glDisable(GLES20.GL_BLEND);
+    // ================= adaptive resolution =================
+
+    private void adaptResolution(float dt) {
+        if (runTime < 2.5f) return; // let fps estimate settle
+        if (fps < 52f) {
+            lowTimer += dt;
+            highTimer = 0f;
+            if (lowTimer > 1.5f && adaptIdx > 0) {
+                adaptIdx--;
+                applyResolution();
+                lowTimer = 0f;
+                toast(activity.getString(R.string.toast_res,
+                        Math.round(ADAPT_STEPS[adaptIdx] * 100f)));
+            }
+        } else if (fps > 58f) {
+            highTimer += dt;
+            lowTimer = 0f;
+            if (highTimer > 5f && adaptIdx < ADAPT_STEPS.length - 1) {
+                adaptIdx++;
+                applyResolution();
+                highTimer = 0f;
+                toast(activity.getString(R.string.toast_res,
+                        Math.round(ADAPT_STEPS[adaptIdx] * 100f)));
+            }
+        } else {
+            lowTimer = 0f;
+            highTimer = 0f;
         }
     }
 
@@ -500,7 +585,6 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     private void sortFarToNear(List<VpWindows.Window> vis, float[] eyeView) {
         // insertion sort by eye-space z ascending (most negative = farthest, drawn first)
-        // so alpha blending composes correctly for overlapping windows
         for (int i = 1; i < vis.size(); i++) {
             VpWindows.Window w = vis.get(i);
             float zw = viewZ(eyeView, w.ax, w.ay, w.az);
@@ -561,6 +645,67 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glEnable(GLES20.GL_BLEND);
     }
 
+    /** Draws an OES panel with curved geometry (cylinder segment). */
+    private void drawOesMesh(int tex, Panel p, float[] pv) {
+        float sx = p.width / Math.max(0.01f, p.mesh.baseW);
+        Matrix.setIdentityM(tmpM2, 0);
+        Matrix.translateM(tmpM2, 0, p.cx, p.cy, p.cz);
+        if (p.yaw != 0f) Matrix.rotateM(tmpM2, 0, (float) Math.toDegrees(p.yaw), 0f, 1f, 0f);
+        Matrix.scaleM(tmpM2, 0, sx, sx, sx);
+        Matrix.multiplyMM(tmpM3, 0, pv, 0, tmpM2, 0);
+
+        GLES20.glDisable(GLES20.GL_BLEND);
+        GLES20.glUseProgram(pCam);
+        GLES20.glUniformMatrix4fv(uCamMVP, 1, false, tmpM3, 0);
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, tex);
+        GLES20.glUniform1i(uCamTex, 0);
+        GLES20.glUniform1f(uCamAngle, 0f);
+        GLES20.glUniform1f(uCamZoom, 1f);
+        GLES20.glUniform1f(uCamOverscan, 1f);
+        GLES20.glEnableVertexAttribArray(aCamPos);
+        GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, p.mesh.pos);
+        GLES20.glEnableVertexAttribArray(aCamUV);
+        GLES20.glVertexAttribPointer(aCamUV, 2, GLES20.GL_FLOAT, false, 8, p.mesh.uv);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, p.mesh.count);
+        GLES20.glEnable(GLES20.GL_BLEND);
+    }
+
+    /** Draws the 360° panorama sphere around the viewer. */
+    private void drawPano(float[] pv) {
+        GLES20.glDisable(GLES20.GL_BLEND);
+        Matrix.setIdentityM(tmpM2, 0);
+        Matrix.multiplyMM(tmpM3, 0, pv, 0, tmpM2, 0);
+        if (panoMode == PANO_IMAGE && panoTex >= 0) {
+            GLES20.glUseProgram(pPanel);
+            GLES20.glUniformMatrix4fv(uPanelMVP, 1, false, tmpM3, 0);
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, panoTex);
+            GLES20.glUniform1i(uPanelTex, 0);
+            GLES20.glUniform1f(uPanelAlpha, 1f);
+            GLES20.glEnableVertexAttribArray(aPanelPos);
+            GLES20.glVertexAttribPointer(aPanelPos, 3, GLES20.GL_FLOAT, false, 12, panoMesh.pos);
+            GLES20.glEnableVertexAttribArray(aPanelUV);
+            GLES20.glVertexAttribPointer(aPanelUV, 2, GLES20.GL_FLOAT, false, 8, panoMesh.uv);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, panoMesh.count);
+        } else if (panoMode == PANO_VIDEO && panoST != null) {
+            GLES20.glUseProgram(pCam);
+            GLES20.glUniformMatrix4fv(uCamMVP, 1, false, tmpM3, 0);
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, panoVidTex);
+            GLES20.glUniform1i(uCamTex, 0);
+            GLES20.glUniform1f(uCamAngle, 0f);
+            GLES20.glUniform1f(uCamZoom, 1f);
+            GLES20.glUniform1f(uCamOverscan, 1f);
+            GLES20.glEnableVertexAttribArray(aCamPos);
+            GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, panoMesh.pos);
+            GLES20.glEnableVertexAttribArray(aCamUV);
+            GLES20.glVertexAttribPointer(aCamUV, 2, GLES20.GL_FLOAT, false, 8, panoMesh.uv);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, panoMesh.count);
+        }
+        GLES20.glEnable(GLES20.GL_BLEND);
+    }
+
     private void drawTexturedQuad(int tex, float cx, float cy, float cz, float yaw,
                                   float w, float h, float scale, float alpha, float[] pv) {
         Matrix.setIdentityM(tmpM2, 0);
@@ -594,10 +739,10 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         border.setColor(dock.hovered ? 0xFF5B8DEF : 0xFF2A3046);
         c.drawRoundRect(2, 2, p.pw - 2, p.ph - 2, 50, 50, border);
 
-        String[] icons = {"⟲", "🎬", "🖼", "🌍", "⚙"};
+        String[] icons = {"⟲", "🎬", "🖼", "360°", "▣", "🌍", "⚙"};
         Paint icon = new Paint(Paint.ANTI_ALIAS_FLAG);
         icon.setColor(0xFFE8ECF5);
-        icon.setTextSize(74f);
+        icon.setTextSize(62f);
         icon.setTextAlign(Paint.Align.CENTER);
         Paint btnBg = new Paint(Paint.ANTI_ALIAS_FLAG);
         Paint btnBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -606,10 +751,9 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
         for (int i = 0; i < p.buttons.size() && i < icons.length; i++) {
             Panel.Button b = p.buttons.get(i);
-            boolean open = false;
             if (!"recenter".equals(b.id)) {
                 VpWindows.Window w = wm.find(b.id);
-                open = w != null && !w.minimized;
+                boolean open = w != null && !w.minimized;
                 boolean mini = w != null && w.minimized;
                 btnBg.setColor(b.hover ? 0xFF3D4964 : (open ? 0xFF2A3550 : 0xFF20242F));
                 icon.setAlpha(mini ? 140 : 255);
@@ -622,23 +766,6 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             c.drawText(icons[i], (b.rect.left + b.rect.right) / 2f,
                     (b.rect.top + b.rect.bottom) / 2f - (icon.ascent() + icon.descent()) / 2f, icon);
             icon.setAlpha(255);
-        }
-
-        Paint brand = new Paint(Paint.ANTI_ALIAS_FLAG);
-        brand.setColor(0xFF5B8DEF);
-        brand.setTextSize(40f);
-        brand.setFakeBoldText(true);
-        brand.setTextAlign(Paint.Align.CENTER);
-        c.drawText("VisionPocket", (605 + p.pw) / 2f, 96f, brand);
-
-        long now = SystemClock.uptimeMillis();
-        if (statusMsg != null && now < statusMsgUntil) {
-            Paint msgP = new Paint(Paint.ANTI_ALIAS_FLAG);
-            msgP.setColor(0xFF5B8DEF);
-            msgP.setTextSize(40f);
-            msgP.setFakeBoldText(true);
-            msgP.setTextAlign(Paint.Align.CENTER);
-            c.drawText(statusMsg, p.pw / 2f, 96f, msgP);
         }
     }
 
@@ -700,7 +827,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         dock.dirty = true;
     }
 
-    // ================= touch handling (hand interaction) =================
+    // ================= touch handling =================
 
     public void postTouch(int type, float[] xs, float[] ys) {
         glQueue.add(() -> handleTouch(type, xs, ys));
@@ -737,6 +864,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             case 0: { // DOWN
                 clearAllHover();
                 downX = xs[0]; downY = ys[0]; lastX = downX; lastY = downY;
+                velPx = 0f; velPy = 0f;
                 VpWindows.Hit h = raycastGaze();
                 grabPanel = h != null ? h.panel : null;
                 grabWin = (h != null) ? h.win : null;
@@ -769,6 +897,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 if (touchMode == TM_DRAG) {
                     float dx = x - lastX, dy = y - lastY;
                     lastX = x; lastY = y;
+                    velPx = velPx * 0.55f + dx * 0.45f;
+                    velPy = velPy * 0.55f + dy * 0.45f;
                     applyDrag(dx, dy);
                 }
                 break;
@@ -795,6 +925,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                             activity.playClick();
                         }
                     }
+                } else if (touchMode == TM_DRAG && grabWin != null) {
+                    releaseWithPhysics();
                 }
                 touchMode = TM_IDLE;
                 grabWin = null;
@@ -815,6 +947,51 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             dock.cx += mx;
             dock.cy = Math.max(-1.3f, Math.min(0.7f, dock.cy + my));
             dock.cz = Math.max(-6f, Math.min(-0.5f, dock.cz + mz));
+        }
+    }
+
+    /** On release after a drag: apply inertia + gently snap the window to face the user. */
+    private void releaseWithPhysics() {
+        if (grabWin == null) return;
+        float frameDt = fps > 20f ? 1f / fps : 0.016f;
+        float vx = hr[0] * velPx * grabKx / frameDt + hu[0] * (-velPy) * grabKy / frameDt;
+        float vy = hr[1] * velPx * grabKx / frameDt + hu[1] * (-velPy) * grabKy / frameDt;
+        float vz = hr[2] * velPx * grabKx / frameDt + hu[2] * (-velPy) * grabKy / frameDt;
+        float speed = (float) Math.sqrt(vx * vx + vy * vy + vz * vz);
+        if (speed > 0.35f) {
+            float cap = 1.6f;
+            if (speed > cap) {
+                float f = cap / speed;
+                vx *= f; vy *= f; vz *= f;
+            }
+            inertWin = grabWin;
+            inertVX = vx; inertVY = vy; inertVZ = vz;
+        } else {
+            faceUser(grabWin);
+        }
+    }
+
+    private void faceUser(VpWindows.Window w) {
+        float desired = (float) Math.atan2(-w.ax, -w.az);
+        float cur = w.ayaw;
+        float diff = desired - cur;
+        while (diff > (float) Math.PI) diff -= 2f * (float) Math.PI;
+        while (diff < -(float) Math.PI) diff += 2f * (float) Math.PI;
+        if (Math.abs(diff) < (float) Math.toRadians(10)) {
+            w.ayaw = desired;
+            w.layout();
+        }
+    }
+
+    private void updateInertia(float dt) {
+        if (inertWin == null) return;
+        inertWin.moveBy(inertVX * dt, inertVY * dt, inertVZ * dt);
+        float decay = (float) Math.exp(-dt / 0.28f);
+        inertVX *= decay; inertVY *= decay; inertVZ *= decay;
+        float speed = (float) Math.sqrt(inertVX * inertVX + inertVY * inertVY + inertVZ * inertVZ);
+        if (speed < 0.06f) {
+            faceUser(inertWin);
+            inertWin = null;
         }
     }
 
@@ -872,6 +1049,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         switch (kind) {
             case "cinema": new CinemaWindow(wm, this); break;
             case "photos": new PhotosWindow(wm, this); break;
+            case "pano": new PanoramaWindow(wm, this); break;
+            case "mirror": mirrorWin = new MirrorWindow(wm, this); break;
             case "env": new EnvWindow(wm, this); break;
             case "settings": new SettingsWindow(wm, this); break;
             case "start":
@@ -890,14 +1069,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     }
 
     public boolean back() {
-        final boolean[] consumed = {false};
-        // run synchronously-ish: just inspect state on the UI thread (safe reads)
         VpWindows.Window w = wm.focusedWindow();
         if (w != null) {
-            consumed[0] = true;
             glQueue.add(() -> wm.close(w));
+            return true;
         }
-        return consumed[0];
+        return false;
     }
 
     public void setCameraAllowed(boolean allowed) {
@@ -942,6 +1119,148 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         }
     }
 
+    // ---- panorama 360 ----
+
+    public int panoMode() { return panoMode; }
+
+    public void requestPanoImage() {
+        activity.runOnUiThread(() -> activity.pickImage(true));
+    }
+
+    public void requestPanoVideo() {
+        activity.runOnUiThread(() -> activity.pickVideo(true));
+    }
+
+    public void onPanoImagePicked(Uri u) {
+        glQueue.add(() -> {
+            PanoramaWindow pw = null;
+            for (VpWindows.Window w : wm.list) {
+                if (w.content instanceof PanoramaWindow) { pw = (PanoramaWindow) w.content; break; }
+            }
+            if (pw == null) pw = new PanoramaWindow(wm, this);
+            else wm.focus(pw.window);
+            pw.loadImage(u);
+        });
+    }
+
+    public void onPanoVideoPicked(Uri u) {
+        glQueue.add(() -> {
+            PanoramaWindow pw = null;
+            for (VpWindows.Window w : wm.list) {
+                if (w.content instanceof PanoramaWindow) { pw = (PanoramaWindow) w.content; break; }
+            }
+            if (pw == null) pw = new PanoramaWindow(wm, this);
+            else wm.focus(pw.window);
+            panoStartVideo(u);
+        });
+    }
+
+    /** Called (any thread) by PanoramaWindow after decoding the photo. */
+    public void setPanoImage(Bitmap b) {
+        glQueue.add(() -> {
+            if (b == null) {
+                toast(activity.getString(R.string.pano_error));
+                return;
+            }
+            if (panoTex >= 0) GLES20.glDeleteTextures(1, new int[]{panoTex}, 0);
+            panoTex = GlUtil.createTexture2D();
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, panoTex);
+            try {
+                android.opengl.GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, b, 0);
+                panoMode = PANO_IMAGE;
+            } catch (Exception e) {
+                panoMode = PANO_OFF;
+                toast(activity.getString(R.string.pano_error));
+            }
+            b.recycle();
+        });
+    }
+
+    private void panoStartVideo(Uri u) {
+        panoStopVideo();
+        if (panoST == null) {
+            panoST = new SurfaceTexture(panoVidTex);
+            panoST.setOnFrameAvailableListener(st -> panoFrame = true, camera.callbackHandler());
+            panoSurface = new Surface(panoST);
+        }
+        try {
+            panoMp = new MediaPlayer();
+            panoMp.setDataSource(activity.getApplicationContext(), u);
+            panoMp.setSurface(panoSurface);
+            panoMp.setLooping(true);
+            panoMp.setOnPreparedListener(p -> {
+                panoVideoReady = true;
+                panoMode = PANO_VIDEO;
+                try { p.start(); } catch (Exception ignored) {}
+            });
+            panoMp.setOnErrorListener((p, what, extra) -> {
+                toast(activity.getString(R.string.pano_error));
+                panoMode = PANO_OFF;
+                return true;
+            });
+            panoMp.prepareAsync();
+        } catch (Exception e) {
+            toast(activity.getString(R.string.pano_error));
+        }
+    }
+
+    private void panoStopVideo() {
+        if (panoMp != null) {
+            try { panoMp.release(); } catch (Exception ignored) {}
+            panoMp = null;
+        }
+        panoVideoReady = false;
+    }
+
+    public void panoClear() {
+        glQueue.add(() -> {
+            panoStopVideo();
+            panoMode = PANO_OFF;
+        });
+    }
+
+    // ---- screen mirroring ----
+
+    public int mirrorMode() { return mirrorState; }
+
+    public void requestMirror() {
+        activity.runOnUiThread(activity::startMirrorFlow);
+    }
+
+    public void stopMirror() {
+        glQueue.add(() -> {
+            mirrorState = 0;
+            if (mirrorWin != null) mirrorWin.screen.visible = false;
+            MirrorService.surface = null;
+        });
+        activity.runOnUiThread(() -> MirrorService.requestStop(activity));
+    }
+
+    /** Called on the UI thread after the user accepted the projection dialog. */
+    public void onProjectionResult(int resultCode, Intent data) {
+        glQueue.add(() -> {
+            if (mirrorST == null) {
+                mirrorST = new SurfaceTexture(mirrorTex);
+                mirrorST.setOnFrameAvailableListener(st -> mirrorFrame = true, camera.callbackHandler());
+                mirrorSurface = new Surface(mirrorST);
+            }
+            if (mirrorWin == null) mirrorWin = new MirrorWindow(wm, this);
+            wm.focus(mirrorWin.window);
+            MirrorService.surface = mirrorSurface;
+            Intent svc = new Intent(activity, MirrorService.class);
+            svc.putExtra("code", resultCode);
+            svc.putExtra("data", data);
+            activity.startMirrorService(svc);
+            // screen aspect: portrait phone -> tall screen
+            android.util.DisplayMetrics dm = activity.getResources().getDisplayMetrics();
+            float aspect = (float) dm.widthPixels / (float) dm.heightPixels;
+            if (aspect > 1f) aspect = 1f / aspect;
+            mirrorWin.setScreenAspect(aspect);
+            mirrorState = 1;
+            toast(activity.getString(R.string.mirror_live));
+        });
+    }
+
     public void headStart() { head.start(); }
     public void headStop() { head.stop(); }
     public void cameraStop() { camera.stop(); }
@@ -963,8 +1282,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     @Override
     public void applyResolution() {
-        float scale = settings.resScale();
-        fboW = Math.min(4096, Math.round(eyeW * 2 * scale));
+        float scale = settings.resScale() * ADAPT_STEPS[adaptIdx];
+        fboW = Math.max(8, Math.min(4096, Math.round(eyeW * 2 * scale)));
         fboH = Math.max(8, Math.round(eyeH * scale));
         if (fbo >= 0) {
             GLES20.glDeleteFramebuffers(1, new int[]{fbo}, 0);
@@ -997,8 +1316,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
     }
 
-    @Override public void pickVideo() { activity.runOnUiThread(activity::openVideoPicker); }
-    @Override public void pickImage() { activity.runOnUiThread(activity::openImagePicker); }
+    @Override public void pickVideo() { activity.runOnUiThread(() -> activity.pickVideo(false)); }
+    @Override public void pickImage() { activity.runOnUiThread(() -> activity.pickImage(false)); }
 
     // ================= CameraPipeline.Listener =================
 

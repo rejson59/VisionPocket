@@ -45,7 +45,7 @@
     <string name="common_close">✕  Close</string>
 
     <string name="start_tagline">Windows in your space</string>
-    <string name="start_tip1">Tap the dock icons to open windows (cinema, photos, settings…)</string>
+    <string name="start_tip1">Tap dock icons to open apps: cinema, 360°, screen mirror, photos…</string>
     <string name="start_tip2">Drag any window or the dock itself to move it in space</string>
     <string name="start_tip3">Two fingers: drag up/down = depth, pinch = resize</string>
     <string name="start_tip4">Look at a button and tap the screen to press it</string>
@@ -55,4 +55,18 @@
     <string name="status_recentered">Recentered</string>
     <string name="status_no_gyro">No gyroscope — head tracking limited</string>
     <string name="err_no_camera">Camera unavailable — passthrough disabled</string>
+    <string name="win_pano">Panorama 360</string>
+    <string name="win_mirror">Screen mirror</string>
+    <string name="pano_hint">A 360° photo or video surrounds you completely — turn your head to look around. Choose below.</string>
+    <string name="pano_img">🖼  360° photo</string>
+    <string name="pano_vid">🎬  360° video</string>
+    <string name="pano_off">⏹  Exit 360°</string>
+    <string name="pano_error">Could not load this 360° media</string>
+    <string name="mirror_hint">Mirror your phone screen onto a big virtual display — YouTube, games, anything.</string>
+    <string name="mirror_start">▶  Start mirroring</string>
+    <string name="mirror_stop">⏹  Stop mirroring</string>
+    <string name="mirror_live">Screen mirroring live</string>
+    <string name="mirror_notif">Screen mirroring active</string>
+    <string name="toast_mirror_stopped">Screen mirroring stopped</string>
+    <string name="toast_res">Eye resolution: %1$d%%</string>
 </resources>

@@ -6,9 +6,11 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.media.SoundPool;
+import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.opengl.GLSurfaceView;
 import android.os.BatteryManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.KeyEvent;
@@ -27,6 +29,7 @@ public class MainActivity extends Activity {
     private final Handler ui = new Handler();
     private int batteryPct = 100;
     private boolean vrStarted = false;
+    private boolean pickForPano = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -110,6 +113,7 @@ public class MainActivity extends Activity {
             boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
             startVr(granted);
         }
+        // POST_NOTIFICATIONS result (requestCode 12) does not block mirroring
     }
 
     @Override
@@ -140,7 +144,10 @@ public class MainActivity extends Activity {
         return super.onKeyDown(keyCode, event);
     }
 
-    public void openVideoPicker() {
+    // ================= pickers =================
+
+    public void pickVideo(boolean forPano) {
+        pickForPano = forPano;
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
         i.setType("video/*");
@@ -149,7 +156,8 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) {}
     }
 
-    public void openImagePicker() {
+    public void pickImage(boolean forPano) {
+        pickForPano = forPano;
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
         i.setType("image/*");
@@ -158,20 +166,54 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) {}
     }
 
+    // ================= screen mirroring =================
+
+    public void startMirrorFlow() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 12);
+        }
+        try {
+            MediaProjectionManager mgr =
+                    (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+            startActivityForResult(mgr.createScreenCaptureIntent(), 9);
+        } catch (Exception ignored) {}
+    }
+
+    public void startMirrorService(Intent intent) {
+        if (Build.VERSION.SDK_INT >= 26) {
+            startForegroundService(intent);
+        } else {
+            startService(intent);
+        }
+    }
+
+    // ================= results =================
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        if (resultCode != RESULT_OK || data == null) return;
+        if (requestCode == 9) {
+            renderer.onProjectionResult(resultCode, data);
+            return;
+        }
         Uri u = data.getData();
+        if (u == null) return;
         try {
             getContentResolver().takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION);
         } catch (Exception ignored) {}
         if (requestCode == 7) {
-            renderer.onVideoPicked(u);
+            if (pickForPano) renderer.onPanoVideoPicked(u);
+            else renderer.onVideoPicked(u);
         } else if (requestCode == 8) {
-            renderer.onImagePicked(u);
+            if (pickForPano) renderer.onPanoImagePicked(u);
+            else renderer.onImagePicked(u);
         }
+        pickForPano = false;
     }
+
+    // ================= sounds / misc =================
 
     public void playChime() {
         try {
@@ -202,5 +244,6 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         try { soundPool.release(); } catch (Exception ignored) {}
+        MirrorService.requestStop(this);
     }
 }

@@ -133,6 +133,8 @@ public class CinemaWindow implements WindowContent {
                     float hw = Math.max(0.9f, Math.min(3.4f, hv * vw / (float) vh));
                     float offY = 0.38f / 2f + hv / 2f + 0.06f;
                     window.setPartGeometry(video, hw, hv, 0f, offY, 0f);
+                    // curved Quest-style screen wrapping toward the viewer
+                    video.mesh = Mesh.cylinder(hw, hv, 5.5f, 28, 1);
                     video.visible = true;
                     videoReady = true;
                     p.start();

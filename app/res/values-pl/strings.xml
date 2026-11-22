@@ -42,7 +42,7 @@
     <string name="common_close">✕  Zamknij</string>
 
     <string name="start_tagline">Okna w Twojej przestrzeni</string>
-    <string name="start_tip1">Stuknij ikony w docku, aby otworzyć okna (kino, galeria, ustawienia…)</string>
+    <string name="start_tip1">Stuknij ikony w docku: kino, 360°, duplikat ekranu, galeria…</string>
     <string name="start_tip2">Chwyć dowolne okno lub sam dock i przeciągnij, aby przenieść je w przestrzeni</string>
     <string name="start_tip3">Dwa palce: przeciągnięcie góra/dół = głębia, szczypnięcie = rozmiar</string>
     <string name="start_tip4">Spójrz na przycisk i stuknij ekran, aby go nacisnąć</string>
@@ -52,4 +52,18 @@
     <string name="status_recentered">Wyśrodkowano</string>
     <string name="status_no_gyro">Brak żyroskopu — śledzenie głowy ograniczone</string>
     <string name="err_no_camera">Kamera niedostępna — passthrough wyłączony</string>
+    <string name="win_pano">Panorama 360</string>
+    <string name="win_mirror">Duplikat ekranu</string>
+    <string name="pano_hint">Zdjęcie lub wideo 360° otacza Cię całkowicie — obróć głowę, aby rozglądać się dookoła. Wybierz poniżej.</string>
+    <string name="pano_img">🖼  Zdjęcie 360°</string>
+    <string name="pano_vid">🎬  Wideo 360°</string>
+    <string name="pano_off">⏹  Zakończ 360°</string>
+    <string name="pano_error">Nie udało się wczytać tej panoramy</string>
+    <string name="mirror_hint">Wyświetl ekran telefonu na wielkim wirtualnym ekranie — YouTube, gry, cokolwiek.</string>
+    <string name="mirror_start">▶  Rozpocznij</string>
+    <string name="mirror_stop">⏹  Zatrzymaj</string>
+    <string name="mirror_live">Duplikowanie ekranu aktywne</string>
+    <string name="mirror_notif">Duplikowanie ekranu aktywne</string>
+    <string name="toast_mirror_stopped">Duplikowanie ekranu zatrzymane</string>
+    <string name="toast_res">Rozdzielczość oka: %1$d%%</string>
 </resources>

@@ -15,11 +15,19 @@ lub pięknych środowisk wirtualnych.
 
 ---
 
-## Features / Funkcje (v1.1)
+## Features / Funkcje (v1.2)
 
 - 🖼️ **Spatial windows (Windows-style)** — apps open as floating windows with a title
   bar, ✕ close and — minimize; bring to front, cascade placement, minimized windows
-  live in the dock
+  live in the dock; released windows glide with **inertia** and gently snap to face you
+- 🎬 **Curved cinema screen** — Quest-style cylindrical mesh (radius 5.5 m) that wraps
+  toward the viewer, keeping the video aspect
+- 🌐 **Panorama 360°** — load an equirectangular photo or video and stand *inside* it:
+  the world is a sphere around you, head-tracking included
+- 📱 **Screen mirroring** — mirror the whole phone display (YouTube, games, anything)
+  onto a big virtual screen via MediaProjection (foreground service, one-tap consent)
+- ⚡ **Adaptive eye resolution** — automatic FBO scaling (55–100 %) keeps the frame
+  rate smooth on slower phones, like Quest Dynamic Resolution
 - ✋ **Hand-style interaction** — your finger is the hand: touch a window and drag to
   move it on the view plane, **two-finger drag = depth (push/pull)**,
   **two-finger pinch = resize**, hand cursor (✋/✊) sits on the window surface
@@ -33,17 +41,17 @@ lub pięknych środowisk wirtualnych.
   barrel-distortion post-pass, eye resolution Low/Med/High
 - 🧠 **3DoF head tracking** — fused rotation sensor with exponential smoothing,
   one-tap **Recenter**
-- 🎬 **Cinema window** — pick any video (SAF), giant screen that keeps video aspect,
-  play/pause (tap the screen), ±30 s seek, progress bar
+- 🎬 **Cinema window** — pick any video (SAF), play/pause (tap the screen), ±30 s
+  seek, progress bar
 - 🖼 **Photos window** — place any image from the phone into your space
 - ⚙️ **Settings window** — IPD, lens distortion strength, resolution, passthrough
   on/off/rotation/zoom
 - 🌐 **PL + EN**, boot chime + click sounds, status bar (time · FPS · battery)
-- 📦 **Tiny APK (~0.23 MB)** — native Android (Java + OpenGL ES 2.0), instant startup
+- 📦 **Tiny APK (~0.24 MB)** — native Android (Java + OpenGL ES 2.0), instant startup
 
 ## Install / Instalacja
 
-1. Download `release/VisionPocket-v1.1.apk` (Android 8.0+ / API 26+).
+1. Download `release/VisionPocket-v1.2.apk` (Android 8.0+ / API 26+).
 2. Allow "install unknown apps" for your file manager, then tap the APK.
 3. Run → **START VR** → grant camera permission (or "Start without camera").
 4. Insert the phone into any phone-VR headset, **landscape** orientation.
@@ -57,6 +65,7 @@ lub pięknych środowisk wirtualnych.
 | Depth (push/pull) | Two-finger drag up/down / Dwa palce góra-dół |
 | Resize window | Two-finger pinch / Szczypnięcie dwoma palcami |
 | Open / minimize app | Tap its dock icon again / Stuknij ponownie ikonę w docku |
+| Throw a window | Release a fast drag — it glides, then faces you / Puść szybkie przeciągnięcie — okno dojedzie z bezwładnością |
 | Play/pause video | Tap the video / Stuknij w film |
 | Recenter | Dock ⟲ or Settings / Dock ⟲ lub Ustawienia |
 | Close window | ✕ in the title bar / ✕ na pasku tytułu |
@@ -84,13 +93,17 @@ app/
     VpWindows.java             spatial window manager (Window, parts, chrome,
                                move/scale/minimize, raycasting, spawn cascade)
     WindowContent.java         window body interface
-    CinemaWindow.java          video player window (OES surface + controls)
+    CinemaWindow.java          video player window (curved OES surface + controls)
+    PanoramaWindow.java        360° photo/video panorama window
+    MirrorWindow.java          screen-mirror window (MediaProjection)
+    MirrorService.java         foreground screen-capture service
     PhotosWindow.java          image viewer window
     EnvWindow.java             environment switcher (passthrough/space/horizon)
     SettingsWindow.java        IPD / distortion / resolution / passthrough options
     StartWindow.java           welcome + tips (opened automatically)
     HeadTracker.java           3DoF orientation + smoothing + recenter
     CameraPipeline.java        Camera2 passthrough into a GL SurfaceTexture
+    Mesh.java                  cylinder + sphere meshes (curved screens, panoramas)
     Panel.java                 canvas-drawn quad + buttons + ray hit-testing
     SettingsStore.java         persisted settings
     GlUtil.java / HomeSceneUtil.java   utilities
@@ -98,7 +111,7 @@ tools/
   build_apk.py                 full APK build pipeline (no Gradle, no SDK download)
   vp-debug.keystore            debug signing key (passphrase: visionpocket)
 release/
-  VisionPocket-v1.1.apk        signed, ready-to-install build
+  VisionPocket-v1.2.apk        signed, ready-to-install build
 ```
 
 ## Build from source / Budowanie ze źródeł
@@ -106,8 +119,8 @@ release/
 See [BUILDING.md](BUILDING.md). Short version:
 
 ```bash
-python3 tools/build_apk.py --version-name 1.1 --version-code 2
-# -> release/VisionPocket-v1.1.apk
+python3 tools/build_apk.py --version-name 1.2 --version-code 3
+# -> release/VisionPocket-v1.2.apk
 ```
 
 The pipeline (aapt2 → javac → D8 → aligned zip → apksigner) needs **no Android SDK
@@ -117,7 +130,7 @@ previous ones without uninstalling.
 ## Roadmap / Plany
 
 - On-screen virtual hand model with finger animation during grabs
-- Bluetooth gamepad support, curved cinema screen, 360° photo viewer
+- Bluetooth gamepad support, curved 360° video projection modes
 - Passthrough spatial anchors (windows pinned to real-world places)
 - Optional MediaPipe-style hand tracking where the device supports it
 

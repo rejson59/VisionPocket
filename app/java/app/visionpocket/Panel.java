@@ -46,6 +46,9 @@ public class Panel {
     public boolean oes = false;
     public int oesTex = -1;
 
+    // optional curved geometry (replaces the flat quad when set)
+    public Mesh mesh;
+
     public final List<Button> buttons = new ArrayList<>();
     public DrawHook hook;
     public Click click;
