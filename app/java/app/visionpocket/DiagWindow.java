@@ -105,6 +105,8 @@ public class DiagWindow implements WindowContent {
         sens.add("accel ✓");
         c.drawText(android.text.TextUtils.join(" · ", sens), x, y, pVal);
         y += step;
+        c.drawText(host.pipelineInfo(), x, y, pVal);
+        y += step;
 
         // permissions
         c.drawText(host.activity().getString(R.string.diag_perm), x, y, pHead);

@@ -17,7 +17,14 @@ public class SettingsStore {
     public void setIpd(int v) { prefs.edit().putInt("ipd", clamp(v, 58, 74)).apply(); }
 
     /** Lens distortion strength percent (0..150). */
-    public int distortionPct() { return prefs.getInt("distortion", 100); }
+    public int distortionPct() { return prefs.getInt("distortion", 0); }
+
+    /** One-time migration: v1.9.0 shipped an untested lens-warp default (100%) that
+     *  produced broken output on real hardware; start flat and let the user tune. */
+    public void migrateDistortion() {
+        if (prefs.getBoolean("warp_reset_done", false)) return;
+        prefs.edit().putBoolean("warp_reset_done", true).putInt("distortion", 0).apply();
+    }
     public void setDistortionPct(int v) { prefs.edit().putInt("distortion", clamp(v, 0, 150)).apply(); }
 
     /** Eye resolution scale index 0=low,1=med,2=high. */

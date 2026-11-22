@@ -182,6 +182,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     public VrRenderer(MainActivity activity) {
         this.activity = activity;
         this.settings = new SettingsStore(activity);
+        settings.migrateDistortion();
         this.head = new HeadTracker(activity);
         this.camera = new CameraPipeline(activity, this);
         this.wm = new VpWindows(this);
@@ -1965,6 +1966,15 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     @Override public void applyScene(String id) { glQueue.add(() -> applySceneNow(id)); }
 
     @Override public void pickSrt() { activity.runOnUiThread(() -> activity.pickSrt()); }
+
+    @Override public String pipelineInfo() {
+        return "scr " + scrW + "x" + scrH + " · eye " + eyeW + "x" + eyeH
+                + " · fbo " + fboW + "x" + fboH
+                + " · dist " + settings.distortionPct() + "%"
+                + " · IPD " + settings.ipd() + "mm"
+                + " · env " + settings.envMode() + " · rot " + settings.rotDeg()
+                + " · " + Math.round(fps) + " fps";
+    }
 
     /** One-tap desktop layouts (Work / Cinema / Game scenes). */
     private void applySceneNow(String id) {
