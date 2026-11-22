@@ -13,8 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A world-locked or head-locked quad with a Canvas-drawn texture and
- * rectangular buttons hit-tested by the gaze ray.
+ * A world-locked quad with a Canvas-drawn texture and rectangular buttons
+ * hit-tested by rays (gaze ray or touch-mapped ray).
  */
 public class Panel {
 
@@ -29,10 +29,11 @@ public class Panel {
         public boolean contains(float x, float y) { return rect.contains(x, y); }
     }
 
-    // world/head-space placement
+    // world placement
     public float cx, cy, cz, yaw;   // yaw in radians
     public float width, height;     // meters
     public boolean visible = true;
+    public boolean hovered = false; // ray hit this frame
 
     // texture
     public final int pw, ph;        // bitmap pixels
@@ -40,6 +41,10 @@ public class Panel {
     public final Canvas canvas;
     public int tex = -1;
     public boolean dirty = true;
+
+    // OES panels are rendered with the external-video program (no canvas)
+    public boolean oes = false;
+    public int oesTex = -1;
 
     public final List<Button> buttons = new ArrayList<>();
     public DrawHook hook;
@@ -65,6 +70,7 @@ public class Panel {
 
     /** Redraws the bitmap via the hook (called on the GL thread). */
     public void renderIfNeeded() {
+        if (oes) return;
         if (!dirty && tex >= 0) return;
         if (hook != null) {
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
@@ -77,10 +83,10 @@ public class Panel {
     }
 
     /**
-     * Intersect the world-space gaze ray with this panel; updates hover state.
-     * Returns the hovered button or null.
+     * Intersect a world-space ray with this panel.
+     * Returns {t, px, py} (distance + pixel coords) or null. Updates hover flags.
      */
-    public Button hitTest(float ox, float oy, float oz, float dx, float dy, float dz) {
+    public float[] rayHit(float ox, float oy, float oz, float dx, float dy, float dz) {
         float c = (float) Math.cos(yaw), s = (float) Math.sin(yaw);
         float oxl = ox - cx, oyl = oy - cy, ozl = oz - cz;
         float lx = oxl * c - ozl * s;
@@ -99,16 +105,21 @@ public class Panel {
         float u = (hx + hw) / width;
         float v = 0.5f - hy / height;
         float px = u * pw, py = v * ph;
-        Button found = null;
+        hovered = true;
         for (Button b : buttons) {
             boolean hov = b.contains(px, py);
             if (hov != b.hover) { b.hover = hov; dirty = true; }
-            if (hov) found = b;
         }
-        return found;
+        return new float[]{t, px, py};
+    }
+
+    public Button hoveredButton() {
+        for (Button b : buttons) if (b.hover) return b;
+        return null;
     }
 
     public void clearHover() {
+        hovered = false;
         for (Button b : buttons) {
             if (b.hover) { b.hover = false; dirty = true; }
         }

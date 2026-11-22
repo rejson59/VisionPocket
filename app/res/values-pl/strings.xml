@@ -1,24 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="onboarding_subtitle">Rzeczywistość mieszana w Twojej kieszeni</string>
-    <string name="onboarding_desc">Włóż telefon do gogli kartonowych lub plastikowych i kliknij START. Obraz z kamery stanie się Twoim otoczeniem, a przed Tobą pojawią się unoszące się panele — spójrz na panel i stuknij gdziekolwiek, aby kliknąć.</string>
+    <string name="onboarding_desc">Włóż telefon do gogli kartonowych lub plastikowych i kliknij START. Obraz z kamery stanie się Twoim otoczeniem, a przed Tobą pojawią się okna w przestrzeni — spójrz na jedno i stuknij albo chwyć i przeciągnij, aby je przenieść.</string>
     <string name="btn_start_vr">START VR</string>
     <string name="btn_no_camera">Start bez kamery</string>
     <string name="onboarding_note">Uprawnienie do kamery służy tylko do wyświetlania otoczenia. Nic nie jest nagrywane ani wysyłane.</string>
 
-    <string name="home_subtitle">Dom MR · spójrz i stuknij</string>
-    <string name="home_btn_cinema">🎬  Kino</string>
-    <string name="home_btn_settings">⚙️  Ustawienia</string>
-    <string name="home_btn_passthrough">👁  Passthrough: %1$s</string>
-    <string name="home_btn_recenter">🔄  Wyśrodkuj</string>
-    <string name="home_hint">Spójrz na przycisk i stuknij ekran, aby go kliknąć</string>
+    <string name="win_cinema">Kino</string>
+    <string name="win_photos">Galeria</string>
+    <string name="win_settings">Ustawienia</string>
+    <string name="win_env">Środowisko</string>
+    <string name="win_start">Start</string>
 
-    <string name="common_on">WŁ</string>
-    <string name="common_off">WYŁ</string>
-    <string name="common_back">⬅  Wróć</string>
-    <string name="common_recenter">🔄  Wyśrodkuj</string>
+    <string name="env_pt">👁  Passthrough</string>
+    <string name="env_space">🌌  Kosmos</string>
+    <string name="env_horizon">🏔  Horyzont</string>
 
-    <string name="settings_title">Ustawienia</string>
+    <string name="photos_hint">Wybierz obraz z telefonu, aby umieścić go w swojej przestrzeni.</string>
+
+    <string name="cinema_hint_title">Wybierz film z telefonu</string>
+    <string name="cinema_loading">Wczytywanie filmu…</string>
+    <string name="cinema_error">Nie udało się odtworzyć tego filmu</string>
+    <string name="cinema_btn_play">▶</string>
+    <string name="cinema_btn_pause">⏸</string>
+    <string name="cinema_btn_rew">⏪ 30s</string>
+    <string name="cinema_btn_ff">⏩ 30s</string>
+
     <string name="settings_ipd">Rozstaw oczu (IPD)</string>
     <string name="settings_distortion">Dystorsja soczewek</string>
     <string name="settings_resolution">Rozdzielczość oka</string>
@@ -29,18 +36,19 @@
     <string name="res_medium">Śred</string>
     <string name="res_high">Wysoka</string>
 
-    <string name="cinema_pick_video">📂  Wybierz film</string>
-    <string name="cinema_hint_title">Kino wirtualne</string>
-    <string name="cinema_hint_desc">Wybierz film z telefonu i oglądaj go na gigantycznym ekranie.</string>
-    <string name="cinema_btn_play">▶</string>
-    <string name="cinema_btn_pause">⏸</string>
-    <string name="cinema_btn_rew">⏪ 30s</string>
-    <string name="cinema_btn_ff">⏩ 30s</string>
-    <string name="cinema_btn_exit">⏏</string>
-    <string name="cinema_loading">Wczytywanie filmu…</string>
-    <string name="cinema_error">Nie udało się odtworzyć tego filmu</string>
-    <string name="cinema_ended">Koniec filmu</string>
+    <string name="common_on">WŁ</string>
+    <string name="common_off">WYŁ</string>
+    <string name="common_recenter">🔄  Wyśrodkuj</string>
+    <string name="common_close">✕  Zamknij</string>
 
+    <string name="start_tagline">Okna w Twojej przestrzeni</string>
+    <string name="start_tip1">Stuknij ikony w docku, aby otworzyć okna (kino, galeria, ustawienia…)</string>
+    <string name="start_tip2">Chwyć dowolne okno lub sam dock i przeciągnij, aby przenieść je w przestrzeni</string>
+    <string name="start_tip3">Dwa palce: przeciągnięcie góra/dół = głębia, szczypnięcie = rozmiar</string>
+    <string name="start_tip4">Spójrz na przycisk i stuknij ekran, aby go nacisnąć</string>
+    <string name="start_toast">Witamy w VisionPocket!</string>
+
+    <string name="toast_min">Okno zminimalizowane</string>
     <string name="status_recentered">Wyśrodkowano</string>
     <string name="status_no_gyro">Brak żyroskopu — śledzenie głowy ograniczone</string>
     <string name="err_no_camera">Kamera niedostępna — passthrough wyłączony</string>

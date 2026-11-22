@@ -23,6 +23,7 @@ public class MainActivity extends Activity {
     private View onboarding;
     private SoundPool soundPool;
     private int chimeId = 0;
+    private int clickId = 0;
     private final Handler ui = new Handler();
     private int batteryPct = 100;
     private boolean vrStarted = false;
@@ -42,7 +43,25 @@ public class MainActivity extends Activity {
         glView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
         glView.setPreserveEGLContextOnPause(true);
         glView.setOnTouchListener((v, ev) -> {
-            if (ev.getActionMasked() == MotionEvent.ACTION_DOWN && vrStarted) renderer.onTap();
+            if (!vrStarted) return true;
+            int type;
+            switch (ev.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN: type = 0; break;
+                case MotionEvent.ACTION_MOVE: type = 1; break;
+                case MotionEvent.ACTION_POINTER_DOWN: type = 4; break;
+                case MotionEvent.ACTION_POINTER_UP: type = 5; break;
+                case MotionEvent.ACTION_UP: type = 2; break;
+                case MotionEvent.ACTION_CANCEL: type = 3; break;
+                default: return true;
+            }
+            int n = ev.getPointerCount();
+            float[] xs = new float[n];
+            float[] ys = new float[n];
+            for (int i = 0; i < n; i++) {
+                xs[i] = ev.getX(i);
+                ys[i] = ev.getY(i);
+            }
+            renderer.postTouch(type, xs, ys);
             return true;
         });
 
@@ -51,13 +70,14 @@ public class MainActivity extends Activity {
         findViewById(R.id.btn_no_camera).setOnClickListener(v -> startVr(false));
 
         soundPool = new SoundPool.Builder()
-                .setMaxStreams(1)
+                .setMaxStreams(2)
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build())
                 .build();
         chimeId = soundPool.load(this, R.raw.chime, 1);
+        clickId = soundPool.load(this, R.raw.click, 1);
     }
 
     private void startVr(boolean withCamera) {
@@ -65,6 +85,7 @@ public class MainActivity extends Activity {
         onboarding.setVisibility(View.GONE);
         applyImmersive();
         renderer.setCameraAllowed(withCamera);
+        renderer.onVrStarted();
         playChime();
     }
 
@@ -128,21 +149,39 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) {}
     }
 
+    public void openImagePicker() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("image/*");
+        try {
+            startActivityForResult(i, 8);
+        } catch (Exception ignored) {}
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 7 && resultCode == RESULT_OK && data != null && data.getData() != null) {
-            Uri u = data.getData();
-            try {
-                getContentResolver().takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            } catch (Exception ignored) {}
-            renderer.loadVideo(u);
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        Uri u = data.getData();
+        try {
+            getContentResolver().takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (Exception ignored) {}
+        if (requestCode == 7) {
+            renderer.onVideoPicked(u);
+        } else if (requestCode == 8) {
+            renderer.onImagePicked(u);
         }
     }
 
     public void playChime() {
         try {
             if (soundPool != null) soundPool.play(chimeId, 0.5f, 0.5f, 1, 0, 1f);
+        } catch (Exception ignored) {}
+    }
+
+    public void playClick() {
+        try {
+            if (soundPool != null) soundPool.play(clickId, 0.4f, 0.4f, 2, 0, 1f);
         } catch (Exception ignored) {}
     }
 

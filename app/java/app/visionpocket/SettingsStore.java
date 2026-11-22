@@ -37,6 +37,10 @@ public class SettingsStore {
     public float zoom() { return prefs.getFloat("zoom", 1.0f); }
     public void setZoom(float v) { prefs.edit().putFloat("zoom", clamp(v, 0.6f, 2.0f)).apply(); }
 
+    /** World background: 0=passthrough, 1=space, 2=horizon. */
+    public int envMode() { return prefs.getInt("env", 0); }
+    public void setEnvMode(int v) { prefs.edit().putInt("env", clamp(v, 0, 2)).apply(); }
+
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
     private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
 }

@@ -26,7 +26,10 @@ public class HeadTracker implements SensorEventListener {
     private static final float[] G = { 1f, 0f, 0f,   0f, 0f, 1f,   0f, -1f, 0f };
     private final float[] tmp3 = new float[9];
     private final float[] dg4 = new float[16];      // device -> gl, raw
+    private final float[] target = new float[16];   // device -> gl, target (unsmoothed)
     private final float[] recenterM = new float[16]; // accumulated yaw correction
+
+    private static final float SMOOTH = 0.45f; // exponential smoothing toward sensor
 
     private final float[] rotation = new float[16]; // device -> gl final
     private final float[] view = new float[16];     // inverse (transpose), rotation only
@@ -88,9 +91,34 @@ public class HeadTracker implements SensorEventListener {
         SensorManager.getRotationMatrixFromVector(R3, event.values);
         GlUtil.mat3mul(G, R3, tmp3);
         GlUtil.mat3to4(tmp3, dg4);
-        // final = recenter * dg
-        Matrix.multiplyMM(rotation, 0, recenterM, 0, dg4, 0);
+        // target = recenter * dg
+        Matrix.multiplyMM(target, 0, recenterM, 0, dg4, 0);
+        // exponential smoothing toward the sensor reading (reduces jitter)
+        for (int i = 0; i < 16; i++) {
+            rotation[i] += (target[i] - rotation[i]) * SMOOTH;
+        }
+        orthonormalize(rotation);
         Matrix.transposeM(view, 0, rotation, 0);
+    }
+
+    /** Re-orthonormalizes the 3x3 rotation part after lerping. */
+    private static void orthonormalize(float[] m) {
+        float ax = m[0], ay = m[1], az = m[2];
+        float l0 = (float) Math.sqrt(ax * ax + ay * ay + az * az);
+        if (l0 < 1e-8f) return;
+        ax /= l0; ay /= l0; az /= l0;
+        float bx = m[4], by = m[5], bz = m[6];
+        float d = bx * ax + by * ay + bz * az;
+        bx -= d * ax; by -= d * ay; bz -= d * az;
+        float l1 = (float) Math.sqrt(bx * bx + by * by + bz * bz);
+        if (l1 < 1e-8f) return;
+        bx /= l1; by /= l1; bz /= l1;
+        float cx = ay * bz - az * by;
+        float cy = az * bx - ax * bz;
+        float cz = ax * by - ay * bx;
+        m[0] = ax; m[1] = ay; m[2] = az;
+        m[4] = bx; m[5] = by; m[6] = bz;
+        m[8] = cx; m[9] = cy; m[10] = cz;
     }
 
     @Override
