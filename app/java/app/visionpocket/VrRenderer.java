@@ -134,6 +134,10 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private float gestureScale0 = 1f, pinchInit = 1f, gestureLastMidY = 0f;
     private float velPx = 0f, velPy = 0f;
 
+    // --- game overlay ---
+    private GameWindow gameWin;
+    private Game2048Window game2048Win;
+
     // --- window inertia ---
     private VpWindows.Window inertWin;
     private float inertVX, inertVY, inertVZ;
@@ -219,19 +223,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             "precision mediump float;\n" +
             "uniform float uTime;\n" +
             "varying vec2 vUV;\n" +
-            "float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n" +
             "void main(){\n" +
             "  vec2 uv = vUV;\n" +
-            "  vec3 col = mix(vec3(0.012, 0.016, 0.05), vec3(0.07, 0.05, 0.18), uv.y);\n" +
-            "  col += vec3(0.10, 0.05, 0.16) * pow(1.0 - abs(uv.y - 0.35), 3.0) * 0.55;\n" +
-            "  vec2 g = uv * vec2(150.0, 75.0);\n" +
-            "  vec2 id = floor(g);\n" +
-            "  float h = hash(id);\n" +
-            "  vec2 f = fract(g) - 0.5;\n" +
-            "  vec2 off = vec2(hash(id + 7.3), hash(id + 3.7)) - 0.5;\n" +
-            "  float star = smoothstep(0.10, 0.0, length(f + off * 0.6));\n" +
-            "  float tw = 0.55 + 0.45 * sin(uTime * (1.0 + h * 3.0) + h * 40.0);\n" +
-            "  col += vec3(0.9, 0.95, 1.0) * step(0.94, h) * star * tw;\n" +
+            "  vec3 col = mix(vec3(0.047, 0.050, 0.058), vec3(0.030, 0.032, 0.037), uv.y);\n" +
+            "  float vig = smoothstep(1.15, 0.30, distance(uv, vec2(0.5, 0.42)));\n" +
+            "  col *= 0.74 + 0.26 * vig;\n" +
+            "  col += vec3(0.055, 0.058, 0.066) * pow(max(0.0, 1.0 - distance(uv, vec2(0.5, 0.94)) * 1.7), 3.0);\n" +
             "  gl_FragColor = vec4(col, 1.0);\n" +
             "}\n";
 
@@ -244,19 +241,11 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             "  float horizon = 0.55;\n" +
             "  vec3 col;\n" +
             "  if (uv.y > horizon) {\n" +
-            "    col = mix(vec3(0.10, 0.14, 0.30), vec3(0.03, 0.05, 0.13), smoothstep(horizon, 1.0, uv.y));\n" +
+            "    col = mix(vec3(0.135, 0.145, 0.165), vec3(0.35, 0.34, 0.335), smoothstep(horizon, 0.78, uv.y));\n" +
+            "    col = mix(col, vec3(0.118, 0.122, 0.138), smoothstep(0.78, 1.0, uv.y));\n" +
+            "    col += vec3(0.10, 0.085, 0.07) * exp(-abs(uv.y - horizon) * 14.0) * exp(-abs(uv.x - 0.5) * 3.0);\n" +
             "  } else {\n" +
-            "    col = vec3(0.028, 0.045, 0.075);\n" +
-            "  }\n" +
-            "  col += vec3(0.10, 0.30, 0.45) * exp(-abs(uv.y - horizon) * 26.0);\n" +
-            "  if (uv.y <= horizon) {\n" +
-            "    float depth = horizon - uv.y;\n" +
-            "    float zx = uv.x * (8.0 + 80.0 * depth);\n" +
-            "    float zz = depth * (5.0 + 50.0 * depth);\n" +
-            "    float lineX = smoothstep(0.47, 0.5, abs(fract(zx) - 0.5));\n" +
-            "    float lineZ = smoothstep(0.47, 0.5, abs(fract(zz) - 0.5));\n" +
-            "    float fade = smoothstep(horizon, horizon - 0.10, uv.y) * (1.0 - smoothstep(0.45, 0.55, depth));\n" +
-            "    col += vec3(0.10, 0.55, 0.65) * max(lineX, lineZ) * 0.45 * fade;\n" +
+            "    col = mix(vec3(0.055, 0.055, 0.060), vec3(0.030, 0.031, 0.034), smoothstep(horizon, 0.0, uv.y));\n" +
             "  }\n" +
             "  gl_FragColor = vec4(col, 1.0);\n" +
             "}\n";
@@ -303,10 +292,11 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         this.wm = new VpWindows(this);
         head.setRecenterListener(this);
 
-        String[] ids = {"recenter", "cinema", "photos", "pano", "mirror", "notes", "apps", "viz", "env", "settings"};
-        dock = new Panel(0f, -0.45f, -1.6f, 0f, 1.3f, 0.17f, 1000f);
+        String[] ids = {"recenter", "cinema", "photos", "pano", "mirror", "notes", "apps",
+                "viz", "game", "g2048", "env", "settings"};
+        dock = new Panel(0f, -0.45f, -1.6f, 0f, 1.45f, 0.17f, 1000f);
         for (int i = 0; i < ids.length; i++) {
-            int x0 = 60 + i * 114;
+            int x0 = 40 + i * 116;
             dock.add(ids[i], x0, 30, x0 + 92, 130);
         }
         dock.hook = this::drawDock;
@@ -573,6 +563,14 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 }
             }
 
+            // game targets overlay
+            for (Panel tp : gamePanels()) {
+                if (!tp.visible) continue;
+                tp.renderIfNeeded();
+                drawTexturedQuad(tp.tex, tp.cx, tp.cy, tp.cz, tp.yaw,
+                        tp.width, tp.height, 1f, 1f, pv, 0f);
+            }
+
             // dock
             dock.renderIfNeeded();
             drawTexturedQuad(dock.tex, dock.cx, dock.cy, dock.cz, dock.yaw,
@@ -691,12 +689,24 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         return new float[]{(float) Math.sin(yaw) * cp, (float) Math.sin(pitch), -(float) Math.cos(yaw) * cp};
     }
 
+    private List<Panel> gamePanels() {
+        if (gameWin == null || gameWin.window.minimized) return java.util.Collections.emptyList();
+        return gameWin.targets;
+    }
+
     private VpWindows.Hit raycastAlong(float[] dir) {
         float fx = dir[0], fy = dir[1], fz = dir[2];
         VpWindows.Hit best = wm.raycast(0f, 0f, 0f, fx, fy, fz);
         float[] dh = dock.rayHit(0f, 0f, 0f, fx, fy, fz);
         if (dh != null && (best == null || dh[0] < best.t)) {
             best = new VpWindows.Hit(null, dock, dh[0], dh[1], dh[2]);
+        }
+        for (Panel tp : gamePanels()) {
+            if (!tp.visible) continue;
+            float[] th = tp.rayHit(0f, 0f, 0f, fx, fy, fz);
+            if (th != null && (best == null || th[0] < best.t)) {
+                best = new VpWindows.Hit(gameWin.window, tp, th[0], th[1], th[2]);
+            }
         }
         return best;
     }
@@ -806,7 +816,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glUseProgram(pColor);
         Matrix.setIdentityM(tmpM, 0);
         GLES20.glUniformMatrix4fv(uColorMVP, 1, false, tmpM, 0);
-        GLES20.glUniform4f(uColorColor, 0.36f, 0.55f, 0.94f, 0.75f);
+        GLES20.glUniform4f(uColorColor, 0.62f, 0.68f, 0.80f, 0.55f);
         GLES20.glEnableVertexAttribArray(aColorPos);
         GLES20.glVertexAttribPointer(aColorPos, 3, GLES20.GL_FLOAT, false, 12, laserBuf);
         GLES20.glLineWidth(4f);
@@ -1006,15 +1016,15 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     private void drawDock(Canvas c, Panel p) {
         Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bg.setColor(dock.hovered ? 0xF01A1E30 : 0xF0141622);
+        bg.setColor(dock.hovered ? 0xF01A1B1E : 0xF0131315);
         c.drawRoundRect(0, 0, p.pw, p.ph, 50, 50, bg);
         Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
         border.setStyle(Paint.Style.STROKE);
         border.setStrokeWidth(3f);
-        border.setColor(dock.hovered ? 0xFF5B8DEF : 0xFF2A3046);
+        border.setColor(dock.hovered ? 0xFF8FA3C8 : 0xFF2A3046);
         c.drawRoundRect(2, 2, p.pw - 2, p.ph - 2, 50, 50, border);
 
-        String[] icons = {"⟲", "🎬", "🖼", "360°", "▣", "📝", "🚀", "🎵", "🌍", "⚙"};
+        String[] icons = {"⟲", "🎬", "🖼", "360°", "▣", "📝", "🚀", "🎵", "🎯", "▦", "🌍", "⚙"};
         Paint icon = new Paint(Paint.ANTI_ALIAS_FLAG);
         icon.setColor(0xFFE8ECF5);
         icon.setTextSize(56f);
@@ -1030,13 +1040,13 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 VpWindows.Window w = wm.find(b.id);
                 boolean open = w != null && !w.minimized;
                 boolean mini = w != null && w.minimized;
-                btnBg.setColor(b.hover ? 0xFF3D4964 : (open ? 0xFF2A3550 : 0xFF20242F));
+                btnBg.setColor(b.hover ? 0xFF2E323A : (open ? 0xFF2A2D34 : 0xFF1D1F24));
                 icon.setAlpha(mini ? 140 : 255);
             } else {
-                btnBg.setColor(b.hover ? 0xFF3D4964 : 0xFF20242F);
+                btnBg.setColor(b.hover ? 0xFF2E323A : 0xFF1D1F24);
             }
             c.drawRoundRect(b.rect, 20, 20, btnBg);
-            btnBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
+            btnBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
             c.drawRoundRect(b.rect, 20, 20, btnBorder);
             c.drawText(icons[i], (b.rect.left + b.rect.right) / 2f,
                     (b.rect.top + b.rect.bottom) / 2f - (icon.ascent() + icon.descent()) / 2f, icon);
@@ -1046,10 +1056,10 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     private void drawStatusBar(Canvas c, Panel p) {
         Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bg.setColor(0xC2101218);
+        bg.setColor(0xC2101114);
         c.drawRoundRect(0, 0, p.pw, p.ph, 60, 60, bg);
         Paint left = new Paint(Paint.ANTI_ALIAS_FLAG);
-        left.setColor(0xFF8FA7E8);
+        left.setColor(0xFFA9B2C4);
         left.setTextSize(44f);
         left.setFakeBoldText(true);
         left.setTextAlign(Paint.Align.LEFT);
@@ -1070,7 +1080,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         if (!gyroWarned && !head.hasSensor) {
             gyroWarned = true;
             Paint msgP = new Paint(Paint.ANTI_ALIAS_FLAG);
-            msgP.setColor(0xFF5B8DEF);
+            msgP.setColor(0xFF8FA3C8);
             msgP.setTextSize(36f);
             msgP.setTextAlign(Paint.Align.CENTER);
             c.drawText(activity.getString(R.string.status_no_gyro), p.pw / 2f, 78f, msgP);
@@ -1146,6 +1156,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private void clearAllHover() {
         wm.clearHover();
         dock.clearHover();
+        for (Panel tp : gamePanels()) tp.clearHover();
     }
 
     private void computeGrabBasis() {
@@ -1368,6 +1379,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             case "viz":
                 activity.ensureRecordAudio();
                 new VisualizerWindow(wm, this);
+                break;
+            case "game":
+                gameWin = new GameWindow(wm, this);
+                break;
+            case "g2048":
+                game2048Win = new Game2048Window(wm, this);
                 break;
             case "env": new EnvWindow(wm, this); break;
             case "settings": new SettingsWindow(wm, this); break;
@@ -1845,6 +1862,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         ptxYaw -= deltaYaw;
         dock.rotateBy(deltaYaw);
         wm.onRecenter(deltaYaw);
+        if (gameWin != null) gameWin.rotateOverlay(deltaYaw);
         setMsg(activity.getString(R.string.status_recentered), 2000);
     }
 }

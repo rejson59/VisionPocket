@@ -52,16 +52,16 @@ public class LauncherWindow implements WindowContent {
         chrome.add("prev", 340, 890 + s, 560, 980 + s);
         chrome.add("next", 700, 890 + s, 920, 980 + s);
 
-        pBg.setColor(0xFF0E101A);
-        pBtn.setColor(0xFF232838);
-        pBtnHover.setColor(0xFF3D4964);
+        pBg.setColor(0xFF101113);
+        pBtn.setColor(0xFF1F2126);
+        pBtnHover.setColor(0xFF2E323A);
         pBorder.setStyle(Paint.Style.STROKE);
         pBorder.setStrokeWidth(3f);
-        pBorder.setColor(0xFF39415A);
+        pBorder.setColor(0xFF2E3138);
         pLabel.setColor(0xFFE8ECF5);
         pLabel.setTextSize(48f);
         pLabel.setTextAlign(Paint.Align.CENTER);
-        pMsg.setColor(0xFF9AA3B8);
+        pMsg.setColor(0xFF9BA0AB);
         pMsg.setTextSize(42f);
         pMsg.setTextAlign(Paint.Align.CENTER);
         pArrow.setTextSize(64f);
@@ -100,7 +100,7 @@ public class LauncherWindow implements WindowContent {
 
     private void drawBody(Canvas c, Panel p, boolean focused) {
         int s = VpWindows.STRIP_PX;
-        pBg.setColor(0xFF0E101A);
+        pBg.setColor(0xFF101113);
         c.drawRoundRect(0, 0, p.pw, p.ph - s, 0, 0, pBg);
 
         int pages = Math.max(1, (apps.size() + PER - 1) / PER);
@@ -118,7 +118,7 @@ public class LauncherWindow implements WindowContent {
                     if (b == null) continue;
                     RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
                     c.drawRoundRect(r, 26, 26, b.hover ? pBtnHover : pBtn);
-                    pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
+                    pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
                     c.drawRoundRect(r, 26, 26, pBorder);
                     String name = labels.get(idx);
                     if (name.length() > 22) name = name.substring(0, 21) + "…";

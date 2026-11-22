@@ -35,18 +35,18 @@ public class CalibrationWindow implements WindowContent {
         chrome.add("done", 740, 560 + s, 1020, 670 + s);
         chrome.click = b -> onClick(b.id);
 
-        pBg.setColor(0xFF0E101A);
-        pLine.setColor(0xFF5B8DEF);
+        pBg.setColor(0xFF101113);
+        pLine.setColor(0xFF8FA3C8);
         pLine.setStrokeWidth(4f);
-        pBtn.setColor(0xFF232838);
-        pBtnHover.setColor(0xFF3D4964);
+        pBtn.setColor(0xFF1F2126);
+        pBtnHover.setColor(0xFF2E323A);
         pBorder.setStyle(Paint.Style.STROKE);
         pBorder.setStrokeWidth(3f);
-        pBorder.setColor(0xFF39415A);
+        pBorder.setColor(0xFF2E3138);
         pLabel.setColor(0xFFE8ECF5);
         pLabel.setTextSize(54f);
         pLabel.setTextAlign(Paint.Align.CENTER);
-        pText.setColor(0xFF9AA3B8);
+        pText.setColor(0xFF9BA0AB);
         pText.setTextSize(40f);
         pText.setTextAlign(Paint.Align.LEFT);
 
@@ -55,7 +55,7 @@ public class CalibrationWindow implements WindowContent {
 
     private void drawBody(Canvas c, Panel p, boolean focused) {
         int s = VpWindows.STRIP_PX;
-        pBg.setColor(0xFF0E101A);
+        pBg.setColor(0xFF101113);
         c.drawRoundRect(0, 0, p.pw, p.ph - s, 0, 0, pBg);
 
         // vertical line test pattern (adjust IPD until it looks crisp & single)
@@ -73,7 +73,7 @@ public class CalibrationWindow implements WindowContent {
         for (Panel.Button b : p.buttons) {
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             c.drawRoundRect(r, 20, 20, b.hover ? pBtnHover : pBtn);
-            pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
             c.drawRoundRect(r, 20, 20, pBorder);
             String t;
             if ("ipd_m".equals(b.id)) t = "−  " + host.settings().ipd() + " mm";

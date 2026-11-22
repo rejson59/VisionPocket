@@ -13,8 +13,8 @@
     <string name="win_start">Start</string>
 
     <string name="env_pt">👁  Passthrough</string>
-    <string name="env_space">🌌  Kosmos</string>
-    <string name="env_horizon">🏔  Horyzont</string>
+    <string name="env_space">◻  Studio</string>
+    <string name="env_horizon">🌆  Zmierzch</string>
 
     <string name="photos_hint">Wybierz obraz z telefonu, aby umieścić go w swojej przestrzeni.</string>
 
@@ -114,4 +114,17 @@
     <string name="diag_misc">Ustawienia</string>
     <string name="diag_storage">Wolne miejsce: %1$d GB</string>
     <string name="env_auto_recenter">🔄 Auto-wyśrodkowanie</string>
+    <string name="win_game">Focus</string>
+    <string name="win_2048">2048</string>
+    <string name="game_score">Punkty</string>
+    <string name="game_time">Czas</string>
+    <string name="game_best">Rekord</string>
+    <string name="game_start">▶  Start</string>
+    <string name="game_stop">⏸  Stop</string>
+    <string name="game_reset">↺  Od nowa</string>
+    <string name="game_hint">Spójrz na cel i stuknij ekran. Kolejne trafienia dają punkty za combo.</string>
+    <string name="game_over">Koniec rundy — punkty: %1$d</string>
+    <string name="game_new_best">Nowy rekord: %1$d!</string>
+    <string name="g2048_new">↺  Nowa</string>
+    <string name="g2048_over">Brak ruchów — spróbuj Nowa</string>
 </resources>

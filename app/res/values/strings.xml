@@ -16,8 +16,8 @@
     <string name="win_start">Start</string>
 
     <string name="env_pt">👁  Passthrough</string>
-    <string name="env_space">🌌  Space</string>
-    <string name="env_horizon">🏔  Horizon</string>
+    <string name="env_space">◻  Studio</string>
+    <string name="env_horizon">🌆  Dusk</string>
 
     <string name="photos_hint">Pick an image from your phone to place it in your space.</string>
 
@@ -117,4 +117,17 @@
     <string name="diag_misc">Settings</string>
     <string name="diag_storage">Free storage: %1$d GB</string>
     <string name="env_auto_recenter">🔄 Auto-recenter</string>
+    <string name="win_game">Focus</string>
+    <string name="win_2048">2048</string>
+    <string name="game_score">Score</string>
+    <string name="game_time">Time</string>
+    <string name="game_best">Best</string>
+    <string name="game_start">▶  Start</string>
+    <string name="game_stop">⏸  Stop</string>
+    <string name="game_reset">↺  Reset</string>
+    <string name="game_hint">Look at a target and tap the screen. Chain hits for combo points.</string>
+    <string name="game_over">Round over — score: %1$d</string>
+    <string name="game_new_best">New best: %1$d!</string>
+    <string name="g2048_new">↺  New</string>
+    <string name="g2048_over">No more moves — try New</string>
 </resources>

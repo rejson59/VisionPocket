@@ -37,8 +37,8 @@ public class DiagWindow implements WindowContent {
         window.attachChrome(chrome);
         window.content = this;
 
-        pBg.setColor(0xFF0E101A);
-        pHead.setColor(0xFF8FA7E8);
+        pBg.setColor(0xFF101113);
+        pHead.setColor(0xFFA9B2C4);
         pHead.setTextSize(42f);
         pHead.setFakeBoldText(true);
         pHead.setTextAlign(Paint.Align.LEFT);
@@ -51,7 +51,7 @@ public class DiagWindow implements WindowContent {
 
     private void drawBody(Canvas c, Panel p, boolean focused) {
         int s = VpWindows.STRIP_PX;
-        pBg.setColor(0xFF0E101A);
+        pBg.setColor(0xFF101113);
         c.drawRoundRect(0, 0, p.pw, p.ph - s, 0, 0, pBg);
 
         float x = 40f;

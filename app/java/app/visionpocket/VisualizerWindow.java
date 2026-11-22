@@ -32,10 +32,10 @@ public class VisualizerWindow implements WindowContent {
         window.attachChrome(chrome);
         window.content = this;
 
-        pBg.setColor(0xFF0E101A);
-        pBar.setColor(0xFF5B8DEF);
-        pBar2.setColor(0xFF7FD1FF);
-        pMsg.setColor(0xFF9AA3B8);
+        pBg.setColor(0xFF101113);
+        pBar.setColor(0xFF8FA3C8);
+        pBar2.setColor(0xFF8FA3C8);
+        pMsg.setColor(0xFF9BA0AB);
         pMsg.setTextSize(40f);
         pMsg.setTextAlign(Paint.Align.CENTER);
 
@@ -64,7 +64,7 @@ public class VisualizerWindow implements WindowContent {
 
     private void drawBody(Canvas c, Panel p, boolean focused) {
         int s = VpWindows.STRIP_PX;
-        pBg.setColor(0xFF0E101A);
+        pBg.setColor(0xFF101113);
         c.drawRoundRect(0, 0, p.pw, p.ph - s, 0, 0, pBg);
 
         float baseY = p.ph - s - 60f;

@@ -52,6 +52,9 @@ public class Panel {
     // side-by-side stereo: -1 = this panel shows the LEFT half, 1 = right half, 0 = full frame
     public int sbsSide = 0;
 
+    // free-form tag (e.g. game target index)
+    public Object tag;
+
     public final List<Button> buttons = new ArrayList<>();
     public DrawHook hook;
     public Click click;

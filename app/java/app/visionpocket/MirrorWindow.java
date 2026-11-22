@@ -39,15 +39,15 @@ public class MirrorWindow implements WindowContent {
         chrome.add("mstop", 500, 30 + s, 900, 170 + s);
         chrome.click = b -> onClick(b.id);
 
-        pBtn.setColor(0xFF232838);
-        pBtnHover.setColor(0xFF3D4964);
+        pBtn.setColor(0xFF1F2126);
+        pBtnHover.setColor(0xFF2E323A);
         pBorder.setStyle(Paint.Style.STROKE);
         pBorder.setStrokeWidth(3f);
-        pBorder.setColor(0xFF39415A);
+        pBorder.setColor(0xFF2E3138);
         pLabel.setColor(0xFFE8ECF5);
         pLabel.setTextSize(58f);
         pLabel.setTextAlign(Paint.Align.CENTER);
-        pMsg.setColor(0xFF9AA3B8);
+        pMsg.setColor(0xFF9BA0AB);
         pMsg.setTextSize(44f);
         pMsg.setTextAlign(Paint.Align.CENTER);
 
@@ -63,7 +63,7 @@ public class MirrorWindow implements WindowContent {
         for (Panel.Button b : p.buttons) {
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             c.drawRoundRect(r, 22, 22, b.hover ? pBtnHover : pBtn);
-            pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
             c.drawRoundRect(r, 22, 22, pBorder);
             String label = "mstart".equals(b.id)
                     ? ren.activity().getString(R.string.mirror_start)

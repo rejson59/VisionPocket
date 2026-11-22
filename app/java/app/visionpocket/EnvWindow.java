@@ -38,13 +38,13 @@ public class EnvWindow implements WindowContent {
         chrome.add("autorec", 520, 620 + s, 860, 700 + s);
         chrome.click = b -> onClick(b.id);
 
-        pBg.setColor(0xFF0E101A);
-        pBtn.setColor(0xFF232838);
-        pBtnHover.setColor(0xFF3D4964);
-        pBtnActive.setColor(0xFF31518C);
+        pBg.setColor(0xFF101113);
+        pBtn.setColor(0xFF1F2126);
+        pBtnHover.setColor(0xFF2E323A);
+        pBtnActive.setColor(0xFF343945);
         pBorder.setStyle(Paint.Style.STROKE);
         pBorder.setStrokeWidth(3f);
-        pBorder.setColor(0xFF39415A);
+        pBorder.setColor(0xFF2E3138);
         pLabel.setColor(0xFFE8ECF5);
         pLabel.setTextSize(58f);
         pLabel.setTextAlign(Paint.Align.LEFT);
@@ -56,10 +56,10 @@ public class EnvWindow implements WindowContent {
 
     private void drawBody(Canvas c, Panel p, boolean focused) {
         int s = VpWindows.STRIP_PX;
-        pBg.setColor(0xFF0E101A);
+        pBg.setColor(0xFF101113);
         c.drawRoundRect(0, 0, p.pw, p.ph - s, 0, 0, pBg);
         int mode = host.settings().envMode();
-        String[] icons = {"👁", "🌌", "🏔"};
+        String[] icons = {"👁", "◻", "🌆"};
         String[] labels = {
                 host.activity().getString(R.string.env_pt),
                 host.activity().getString(R.string.env_space),
@@ -72,7 +72,7 @@ public class EnvWindow implements WindowContent {
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             Paint fill = b.hover ? pBtnHover : (mode == i ? pBtnActive : pBtn);
             c.drawRoundRect(r, 28, 28, fill);
-            pBorder.setColor(b.hover ? 0xFF5B8DEF : (mode == i ? 0xFF5B8DEF : 0xFF39415A));
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : (mode == i ? 0xFF8FA3C8 : 0xFF2E3138));
             c.drawRoundRect(r, 28, 28, pBorder);
             pSym.setTextAlign(Paint.Align.CENTER);
             c.drawText(icons[i], r.left + 110f, r.centerY() - (pSym.ascent() + pSym.descent()) / 2f, pSym);
@@ -100,7 +100,7 @@ public class EnvWindow implements WindowContent {
             if (!"autorec".equals(b.id)) continue;
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             c.drawRoundRect(r, 18, 18, b.hover ? pBtnHover : (ar ? pBtnActive : pBtn));
-            pBorder.setColor(b.hover ? 0xFF5B8DEF : (ar ? 0xFF5B8DEF : 0xFF39415A));
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : (ar ? 0xFF8FA3C8 : 0xFF2E3138));
             c.drawRoundRect(r, 18, 18, pBorder);
             String t = host.activity().getString(R.string.env_auto_recenter) + " · "
                     + host.activity().getString(ar ? R.string.common_on : R.string.common_off);

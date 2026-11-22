@@ -34,19 +34,19 @@ public class StartWindow implements WindowContent {
         chrome.add("close", 600, 620 + s, 1100, 760 + s);
         chrome.click = b -> onClick(b.id);
 
-        pBg.setColor(0xFF0E101A);
-        pBtn.setColor(0xFF232838);
-        pBtnHover.setColor(0xFF3D4964);
+        pBg.setColor(0xFF101113);
+        pBtn.setColor(0xFF1F2126);
+        pBtnHover.setColor(0xFF2E323A);
         pBorder.setStyle(Paint.Style.STROKE);
         pBorder.setStrokeWidth(3f);
-        pBorder.setColor(0xFF39415A);
+        pBorder.setColor(0xFF2E3138);
         pLabel.setColor(0xFFE8ECF5);
         pLabel.setTextSize(56f);
         pLabel.setTextAlign(Paint.Align.CENTER);
-        pText.setColor(0xFFB9C2D8);
+        pText.setColor(0xFFB4B9C4);
         pText.setTextSize(44f);
         pText.setTextAlign(Paint.Align.LEFT);
-        pHead.setColor(0xFF8FA7E8);
+        pHead.setColor(0xFFA9B2C4);
         pHead.setTextSize(50f);
         pHead.setFakeBoldText(true);
         pHead.setTextAlign(Paint.Align.LEFT);
@@ -56,7 +56,7 @@ public class StartWindow implements WindowContent {
 
     private void drawBody(Canvas c, Panel p, boolean focused) {
         int s = VpWindows.STRIP_PX;
-        pBg.setColor(0xFF0E101A);
+        pBg.setColor(0xFF101113);
         c.drawRoundRect(0, 0, p.pw, p.ph - s, 0, 0, pBg);
 
         c.drawText(host.activity().getString(R.string.start_tagline), 60f, 80f, pHead);
@@ -76,7 +76,7 @@ public class StartWindow implements WindowContent {
             Paint fill = b.hover ? pBtnHover : pBtn;
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             c.drawRoundRect(r, 26, 26, fill);
-            pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
             c.drawRoundRect(r, 26, 26, pBorder);
             String label = "close".equals(b.id)
                     ? host.activity().getString(R.string.common_close)

@@ -65,20 +65,20 @@ public class CinemaWindow implements WindowContent {
         video.click = b -> {};
 
         pBg.setColor(0x00000000);
-        pBtn.setColor(0xFF232838);
-        pBtnHover.setColor(0xFF3D4964);
-        pBtnActive.setColor(0xFF31518C);
+        pBtn.setColor(0xFF1F2126);
+        pBtnHover.setColor(0xFF2E323A);
+        pBtnActive.setColor(0xFF343945);
         pBorder.setStyle(Paint.Style.STROKE);
         pBorder.setStrokeWidth(3f);
-        pBorder.setColor(0xFF39415A);
+        pBorder.setColor(0xFF2E3138);
         pLabel.setColor(0xFFE8ECF5);
         pLabel.setTextSize(62f);
         pLabel.setTextAlign(Paint.Align.CENTER);
-        pMsg.setColor(0xFF9AA3B8);
+        pMsg.setColor(0xFF9BA0AB);
         pMsg.setTextSize(44f);
         pMsg.setTextAlign(Paint.Align.CENTER);
-        pBarBg.setColor(0xFF262A3A);
-        pBarFill.setColor(0xFF5B8DEF);
+        pBarBg.setColor(0xFF26272B);
+        pBarFill.setColor(0xFF8FA3C8);
 
         wm.placeNew(window);
     }
@@ -105,7 +105,7 @@ public class CinemaWindow implements WindowContent {
         for (Panel.Button b : p.buttons) {
             Paint fill = b.hover ? pBtnHover : (playing && "play".equals(b.id) ? pBtnActive : pBtn);
             c.drawRoundRect(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s, 22, 22, fill);
-            pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
             c.drawRoundRect(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s, 22, 22, pBorder);
             String label;
             switch (b.id) {

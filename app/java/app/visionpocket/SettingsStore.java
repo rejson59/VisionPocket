@@ -81,6 +81,14 @@ public class SettingsStore {
     public String lastVideo() { return prefs.getString("lastVideo", ""); }
     public void setLastVideo(String s) { prefs.edit().putString("lastVideo", s == null ? "" : s).apply(); }
 
+    /** Best score in the Focus game. */
+    public int focusBest() { return prefs.getInt("focusBest", 0); }
+    public void setFocusBest(int v) { prefs.edit().putInt("focusBest", v).apply(); }
+
+    /** Best score in 2048. */
+    public int best2048() { return prefs.getInt("best2048", 0); }
+    public void setBest2048(int v) { prefs.edit().putInt("best2048", v).apply(); }
+
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
     private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
 }

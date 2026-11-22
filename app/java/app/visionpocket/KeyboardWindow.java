@@ -75,14 +75,14 @@ public class KeyboardWindow implements WindowContent {
         chrome.add("cancel", x, y5, x + 170, y5 + keyH); x += 180;
         chrome.add("ok", x, y5, x + 190, y5 + keyH);
 
-        pBg.setColor(0xFF0E101A);
-        pField.setColor(0xFF171B2A);
-        pBtn.setColor(0xFF232838);
-        pBtnHover.setColor(0xFF3D4964);
-        pBtnActive.setColor(0xFF31518C);
+        pBg.setColor(0xFF101113);
+        pField.setColor(0xFF17181C);
+        pBtn.setColor(0xFF1F2126);
+        pBtnHover.setColor(0xFF2E323A);
+        pBtnActive.setColor(0xFF343945);
         pBorder.setStyle(Paint.Style.STROKE);
         pBorder.setStrokeWidth(2.5f);
-        pBorder.setColor(0xFF39415A);
+        pBorder.setColor(0xFF2E3138);
         pText.setColor(0xFFE8ECF5);
         pText.setTextSize(54f);
         pText.setTextAlign(Paint.Align.LEFT);
@@ -95,7 +95,7 @@ public class KeyboardWindow implements WindowContent {
 
     private void drawBody(Canvas c, Panel p, boolean focused) {
         int s = VpWindows.STRIP_PX;
-        pBg.setColor(0xFF0E101A);
+        pBg.setColor(0xFF101113);
         c.drawRoundRect(0, 0, p.pw, p.ph - s, 0, 0, pBg);
         // input field
         c.drawRoundRect(40, 14, p.pw - 40, 108, 20, 20, pField);
@@ -113,7 +113,7 @@ public class KeyboardWindow implements WindowContent {
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             boolean active = "shift".equals(b.id) && shift;
             c.drawRoundRect(r, 16, 16, b.hover ? pBtnHover : (active ? pBtnActive : pBtn));
-            pBorder.setColor(b.hover ? 0xFF5B8DEF : (active ? 0xFF5B8DEF : 0xFF39415A));
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : (active ? 0xFF8FA3C8 : 0xFF2E3138));
             c.drawRoundRect(r, 16, 16, pBorder);
             String label = keyLabel(b.id);
             if (("shift".equals(b.id) || label.length() == 1) && shift

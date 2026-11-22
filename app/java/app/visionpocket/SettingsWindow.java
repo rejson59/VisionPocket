@@ -62,14 +62,14 @@ public class SettingsWindow implements WindowContent {
         chrome.add("do_recenter", 1000, 928 + s, 1370, 1024 + s);
         chrome.click = b -> onClick(b.id);
 
-        pBg.setColor(0xFF0E101A);
+        pBg.setColor(0xFF101113);
         pRow.setColor(0x2A1D2130);
-        pBtn.setColor(0xFF232838);
-        pBtnHover.setColor(0xFF3D4964);
-        pBtnActive.setColor(0xFF31518C);
+        pBtn.setColor(0xFF1F2126);
+        pBtnHover.setColor(0xFF2E323A);
+        pBtnActive.setColor(0xFF343945);
         pBorder.setStyle(Paint.Style.STROKE);
         pBorder.setStrokeWidth(3f);
-        pBorder.setColor(0xFF39415A);
+        pBorder.setColor(0xFF2E3138);
         pLabel.setColor(0xFFC9D1E4);
         pLabel.setTextSize(42f);
         pLabel.setTextAlign(Paint.Align.LEFT);
@@ -85,7 +85,7 @@ public class SettingsWindow implements WindowContent {
 
     private void drawBody(Canvas c, Panel p, boolean focused) {
         int s = VpWindows.STRIP_PX;
-        pBg.setColor(0xFF0E101A);
+        pBg.setColor(0xFF101113);
         c.drawRoundRect(0, 0, p.pw, p.ph - s, 0, 0, pBg);
         SettingsStore st = host.settings();
         String[] labels = {
@@ -125,7 +125,7 @@ public class SettingsWindow implements WindowContent {
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             Paint fill = b.hover ? pBtnHover : (isActive(b.id, st) ? pBtnActive : pBtn);
             c.drawRoundRect(r, 18, 18, fill);
-            pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
             c.drawRoundRect(r, 18, 18, pBorder);
             String text = buttonLabel(b.id, st);
             if ("−".equals(text) || "+".equals(text)) {
@@ -139,7 +139,7 @@ public class SettingsWindow implements WindowContent {
             if (!"shot".equals(b.id) && !"calib".equals(b.id) && !"diag".equals(b.id) && !"do_recenter".equals(b.id)) continue;
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             c.drawRoundRect(r, 20, 20, b.hover ? pBtnHover : pBtn);
-            pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
             c.drawRoundRect(r, 20, 20, pBorder);
             String t;
             if ("shot".equals(b.id)) t = host.activity().getString(R.string.settings_shot);

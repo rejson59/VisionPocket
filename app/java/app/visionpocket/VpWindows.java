@@ -62,9 +62,9 @@ public class VpWindows {
         public Window(String kind, String title) {
             this.kind = kind;
             this.title = title;
-            pBg.setColor(0xF1141622);
-            pStrip.setColor(0xFF1B2030);
-            pStripFocused.setColor(0xFF28406E);
+            pBg.setColor(0xF1131315);
+            pStrip.setColor(0xFF1B1C20);
+            pStripFocused.setColor(0xFF2A2E36);
             pBtn.setColor(0x333B4E66);
             pBtnHover.setColor(0xFFB3402F);
             pTitle.setColor(0xFFE8ECF5);
@@ -76,7 +76,7 @@ public class VpWindows {
             pSym.setTextAlign(Paint.Align.CENTER);
             pLine.setStyle(Paint.Style.STROKE);
             pLine.setStrokeWidth(3f);
-            pLine.setColor(0xFF39415A);
+            pLine.setColor(0xFF2E3138);
         }
 
         public static class Part {
@@ -161,10 +161,10 @@ public class VpWindows {
 
         /** Draws title strip + content body (hook of the chrome panel). */
         public void draw(Canvas c, Panel p) {
-            pBg.setColor(0xF1141622);
+            pBg.setColor(0xF1131315);
             c.drawRoundRect(0, 0, p.pw, p.ph, 44, 44, pBg);
             // rounded-top title strip
-            pStripFocused.setColor(0xFF28406E);
+            pStripFocused.setColor(0xFF2A2E36);
             c.drawRoundRect(0, 0, p.pw, STRIP_PX + 40, 44, 44, focused ? pStripFocused : pStrip);
             c.drawRect(0, STRIP_PX - 40, p.pw, STRIP_PX, focused ? pStripFocused : pStrip);
             c.drawText(title, 34f, 72f, pTitle);

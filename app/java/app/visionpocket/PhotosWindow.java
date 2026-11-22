@@ -38,16 +38,16 @@ public class PhotosWindow implements WindowContent {
         chrome.add("pick", chrome.pw - 260, 30 + s, chrome.pw - 40, 150 + s);
         chrome.click = b -> onClick(b.id);
 
-        pBg.setColor(0xFF0E101A);
-        pBtn.setColor(0xFF232838);
-        pBtnHover.setColor(0xFF3D4964);
+        pBg.setColor(0xFF101113);
+        pBtn.setColor(0xFF1F2126);
+        pBtnHover.setColor(0xFF2E323A);
         pBorder.setStyle(Paint.Style.STROKE);
         pBorder.setStrokeWidth(3f);
-        pBorder.setColor(0xFF39415A);
+        pBorder.setColor(0xFF2E3138);
         pLabel.setColor(0xFFE8ECF5);
         pLabel.setTextSize(52f);
         pLabel.setTextAlign(Paint.Align.CENTER);
-        pMsg.setColor(0xFF9AA3B8);
+        pMsg.setColor(0xFF9BA0AB);
         pMsg.setTextSize(46f);
         pMsg.setTextAlign(Paint.Align.CENTER);
 
@@ -82,13 +82,13 @@ public class PhotosWindow implements WindowContent {
 
     private void drawBody(Canvas c, Panel p, boolean focused) {
         int s = VpWindows.STRIP_PX;
-        pBg.setColor(0xFF0E101A);
+        pBg.setColor(0xFF101113);
         c.drawRoundRect(0, 0, p.pw, p.ph - s, 0, 0, pBg);
 
         for (Panel.Button b : p.buttons) {
             Paint fill = b.hover ? pBtnHover : pBtn;
             c.drawRoundRect(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s, 22, 22, fill);
-            pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
             c.drawRoundRect(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s, 22, 22, pBorder);
             HomeSceneUtil.drawCentered(c, "📂",
                     new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s), pLabel);
