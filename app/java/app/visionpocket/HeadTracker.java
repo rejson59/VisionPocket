@@ -39,9 +39,12 @@ public class HeadTracker implements SensorEventListener {
 
     private RecenterListener listener;
 
-    // mount correction: screen frame (as held) -> device frame, plus user roll steps
+    // display-orientation remap (canonical SensorManager table) + user roll steps
     private final float[] mount = new float[16];
     private final float[] tmp4 = new float[16];
+    private final float[] R2 = new float[9];
+    private int remapX = SensorManager.AXIS_X;
+    private int remapY = SensorManager.AXIS_Y;
     private int dispRot = -1;
     private int extraQuarters = -1;
     private SettingsStore settings;
@@ -64,7 +67,7 @@ public class HeadTracker implements SensorEventListener {
     /** Gives the tracker access to persisted view-rotation steps. */
     public void attach(SettingsStore st) { settings = st; refreshMount(true); }
 
-    /** Rebuilds the mount matrix (display orientation + user roll steps). */
+    /** Rebuilds the head-frame mapping: canonical display remap + user roll steps. */
     public void refreshMount(boolean force) {
         int dr = -1;
         try {
@@ -75,21 +78,28 @@ public class HeadTracker implements SensorEventListener {
         if (!force && dr == dispRot && ex == extraQuarters) return;
         dispRot = dr;
         extraQuarters = ex;
-        Matrix.setIdentityM(mount, 0);
-        // sensor frame is tied to the NATURAL (portrait) orientation; the phone is
-        // held landscape, so remap screen->device before going to world coords
-        if (dr == Surface.ROTATION_90) {          // top of device to the right
-            mount[0] = 0; mount[1] = 1;           // screen X = device +Y
-            mount[4] = -1; mount[5] = 0;          // screen Y = device -X
-        } else if (dr == Surface.ROTATION_270) {  // top of device to the left
-            mount[0] = 0; mount[1] = -1;          // screen X = device -Y
-            mount[4] = 1; mount[5] = 0;           // screen Y = device +X
-        } else if (dr == Surface.ROTATION_180) {
-            mount[0] = -1;
-            mount[5] = -1;
+        // Canonical remap table (SensorManager docs; the same one compass apps use
+        // so the needle matches what the user sees):
+        //   ROTATION_0   -> (AXIS_X, AXIS_Y)
+        //   ROTATION_90  -> (AXIS_Y, AXIS_MINUS_X)   // landscape, top to the LEFT
+        //   ROTATION_180 -> (AXIS_MINUS_X, AXIS_MINUS_Y)
+        //   ROTATION_270 -> (AXIS_MINUS_Y, AXIS_X)   // landscape, top to the RIGHT
+        switch (dr) {
+            case Surface.ROTATION_90:
+                remapX = SensorManager.AXIS_Y; remapY = SensorManager.AXIS_MINUS_X; break;
+            case Surface.ROTATION_180:
+                remapX = SensorManager.AXIS_MINUS_X; remapY = SensorManager.AXIS_MINUS_Y; break;
+            case Surface.ROTATION_270:
+                remapX = SensorManager.AXIS_MINUS_Y; remapY = SensorManager.AXIS_X; break;
+            default:
+                remapX = SensorManager.AXIS_X; remapY = SensorManager.AXIS_Y;
         }
+        Matrix.setIdentityM(mount, 0);
         if (ex != 0) Matrix.rotateM(mount, 0, ex * 90f, 0f, 0f, 1f);
     }
+
+    /** Display rotation constant currently used for the remap (diagnostics). */
+    public int displayRotation() { return dispRot; }
 
     private Context ctx() { return appCtx; }
 
@@ -135,7 +145,12 @@ public class HeadTracker implements SensorEventListener {
         if (event.values.length < 4) return;
         if (++events % 30 == 0) refreshMount(false);
         SensorManager.getRotationMatrixFromVector(R3, event.values);
-        GlUtil.mat3mul(G, R3, tmp3);
+        // head frame = DISPLAYED screen frame (right, up, back): remap with the
+        // canonical table, then android-world -> GL, then user roll steps
+        if (!SensorManager.remapCoordinateSystem(R3, remapX, remapY, R2)) {
+            System.arraycopy(R3, 0, R2, 0, R2.length);
+        }
+        GlUtil.mat3mul(G, R2, tmp3);
         GlUtil.mat3to4(tmp3, dg4);
         // target = recenter * dg * mount
         Matrix.multiplyMM(tmp4, 0, dg4, 0, mount, 0);

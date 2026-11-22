@@ -1978,6 +1978,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 + " · IPD " + settings.ipd() + "mm"
                 + " · env " + settings.envMode() + " · rot " + settings.rotDeg()
                 + " · viewRot " + settings.viewRot()
+                + " · dispRot " + head.displayRotation()
                 + " · " + Math.round(fps) + " fps";
     }
 
