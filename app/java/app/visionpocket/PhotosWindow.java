@@ -40,7 +40,7 @@ public class PhotosWindow implements WindowContent {
         this.wm = wm;
         this.host = host;
         window = new VpWindows.Window("photos", host.activity().getString(R.string.win_photos));
-        chrome = new Panel(0, 0, 0, 0, 1.5f, 1.25f, 700f);
+        chrome = new Panel(0, 0, 0, 0, 1.85f, 1.7f, 800f);
         window.addPart(chrome, 0, 0, 0);
         window.attachChrome(chrome);
         window.content = this;

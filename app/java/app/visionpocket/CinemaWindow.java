@@ -19,6 +19,9 @@ public class CinemaWindow implements WindowContent {
 
     private Uri uri;
     private MediaPlayer mp;
+    private final java.util.ArrayList<long[]> subTimes = new java.util.ArrayList<>();
+    private final java.util.ArrayList<String> subTexts = new java.util.ArrayList<>();
+    private boolean resumeApplied = false;
     private boolean prepared = false;
     private boolean error = false;
     private boolean buffering = false;
@@ -41,26 +44,27 @@ public class CinemaWindow implements WindowContent {
         this.wm = wm;
         this.host = host;
         window = new VpWindows.Window("cinema", host.activity().getString(R.string.win_cinema));
-        chrome = new Panel(0, 0, 0, 0, 1.3f, 0.38f, 800f);
+        chrome = new Panel(0, 0, 0, 0, 1.3f, 0.55f, 800f);
         video = new Panel(0, 0, 0, 0, 3.0f, 1.69f, 800f);
         video.oes = true;
         video.visible = false;
 
-        window.addPart(video, 0f, 0.38f / 2f + 1.69f / 2f + 0.06f, 0f);
+        window.addPart(video, 0f, 0.55f / 2f + 1.69f / 2f + 0.06f, 0f);
         window.addPart(chrome, 0f, 0f, 0f);
         window.attachChrome(chrome);
         window.content = this;
 
         // buttons in body coords + STRIP offset (hit-test uses full-canvas px)
         int s = VpWindows.STRIP_PX;
-        chrome.add("voldown", 30, 30 + s, 130, 170 + s);
-        chrome.add("rew", 150, 30 + s, 250, 170 + s);
-        chrome.add("play", 270, 30 + s, 370, 170 + s);
-        chrome.add("ff", 390, 30 + s, 490, 170 + s);
-        chrome.add("volup", 510, 30 + s, 610, 170 + s);
-        chrome.add("pick", 630, 30 + s, 730, 170 + s);
-        chrome.add("url", 750, 30 + s, 850, 170 + s);
-        chrome.add("exit", 870, 30 + s, 970, 170 + s);
+        chrome.add("voldown", 30, 30 + s, 122, 170 + s);
+        chrome.add("rew", 142, 30 + s, 234, 170 + s);
+        chrome.add("play", 254, 30 + s, 346, 170 + s);
+        chrome.add("ff", 366, 30 + s, 458, 170 + s);
+        chrome.add("volup", 478, 30 + s, 570, 170 + s);
+        chrome.add("pick", 590, 30 + s, 682, 170 + s);
+        chrome.add("srt", 702, 30 + s, 794, 170 + s);
+        chrome.add("url", 814, 30 + s, 906, 170 + s);
+        chrome.add("exit", 926, 30 + s, 1018, 170 + s);
         chrome.click = b -> onClick(b.id);
         video.click = b -> {};
 
@@ -103,7 +107,9 @@ public class CinemaWindow implements WindowContent {
             c.drawText(host.activity().getString(R.string.cinema_loading), p.pw / 2f, 120f, pMsg);
         }
         for (Panel.Button b : p.buttons) {
-            Paint fill = b.hover ? pBtnHover : (playing && "play".equals(b.id) ? pBtnActive : pBtn);
+            Paint fill = b.hover ? pBtnHover
+                    : ((playing && "play".equals(b.id)) || ("srt".equals(b.id) && subTimes.size() > 0)
+                        ? pBtnActive : pBtn);
             c.drawRoundRect(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s, 22, 22, fill);
             pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
             c.drawRoundRect(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s, 22, 22, pBorder);
@@ -118,10 +124,33 @@ public class CinemaWindow implements WindowContent {
                 case "exit": label = "⏏"; break;
                 case "voldown": label = "🔉"; break;
                 case "volup": label = "🔊"; break;
+                case "srt": label = "CC"; break;
                 default: label = "";
             }
             HomeSceneUtil.drawCentered(c, label,
                     new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s), pLabel);
+        }
+
+        // subtitles
+        if (subTimes.size() > 0 && videoReady) {
+            String line = null;
+            for (int i = 0; i < subTimes.size(); i++) {
+                long[] t = subTimes.get(i);
+                if (pos >= t[0] && pos <= t[1]) { line = subTexts.get(i); break; }
+            }
+            if (line != null) {
+                Paint sub = new Paint(Paint.ANTI_ALIAS_FLAG);
+                sub.setColor(0xFFF2F3F5);
+                sub.setTextSize(52f);
+                sub.setTextAlign(Paint.Align.CENTER);
+                sub.setShadowLayer(8f, 0f, 3f, 0xE6000000);
+                String[] lines = line.split("\n");
+                float by = p.ph - s - 96f;
+                for (int i = Math.max(0, lines.length - 2); i < lines.length; i++) {
+                    c.drawText(lines[i], p.pw / 2f, by, sub);
+                    by += 62f;
+                }
+            }
         }
     }
 
@@ -130,6 +159,7 @@ public class CinemaWindow implements WindowContent {
     public void loadVideo(Uri u, SurfaceTexture st, Surface surface) {
         uri = u;
         error = false;
+        resumeApplied = false;
         prepared = false;
         videoReady = false;
         releaseMp();
@@ -220,12 +250,66 @@ public class CinemaWindow implements WindowContent {
             case "play": togglePlay(); break;
             case "pick": host.pickVideo(); break;
             case "url": host.openStreamDialog(); break;
-            case "exit": wm.close(window); break;
+            case "exit":
+                if (uri != null && pos > 0) host.settings().setResumeMs(uri.toString(), pos);
+                wm.close(window);
+                break;
         }
     }
 
     @Override public void onBodyClick(Panel part) {
         if (part == video || part == chrome) togglePlay();
+    }
+
+    /** Loads an SRT subtitle file and syncs it with playback. */
+    public void loadSubtitles(Uri u) {
+        subTimes.clear();
+        subTexts.clear();
+        new Thread(() -> {
+            try {
+                java.io.BufferedReader in = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(host.activity().getContentResolver().openInputStream(u), "UTF-8"));
+                java.util.regex.Pattern time = java.util.regex.Pattern.compile(
+                        "(\\d+):(\\d+):(\\d+)[,.](\\d+)\\s*-->\\s*(\\d+):(\\d+):(\\d+)[,.](\\d+)");
+                String l;
+                java.util.ArrayList<String> pending = new java.util.ArrayList<>();
+                long[][] cur = new long[1][];
+                while ((l = in.readLine()) != null) {
+                    java.util.regex.Matcher m = time.matcher(l);
+                    if (m.find()) {
+                        flushSub(cur[0], pending);
+                        cur[0] = new long[]{
+                                Long.parseLong(m.group(1)) * 3600000L + Long.parseLong(m.group(2)) * 60000L
+                                        + Long.parseLong(m.group(3)) * 1000L + Long.parseLong(m.group(4)),
+                                Long.parseLong(m.group(5)) * 3600000L + Long.parseLong(m.group(6)) * 60000L
+                                        + Long.parseLong(m.group(7)) * 1000L + Long.parseLong(m.group(8))};
+                        pending.clear();
+                    } else if (cur[0] != null) {
+                        String t = l.trim();
+                        if (t.isEmpty()) { flushSub(cur[0], pending); cur[0] = null; }
+                        else if (!t.matches("\\d+")) pending.add(t);
+                    }
+                }
+                flushSub(cur[0], pending);
+                in.close();
+            } catch (Exception ignored) {}
+            chrome.dirty = true;
+        }, "vp-srt").start();
+    }
+
+    private void flushSub(long[] t, java.util.ArrayList<String> lines) {
+        if (t == null || lines.isEmpty()) return;
+        subTimes.add(t);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < Math.min(2, lines.size()); i++) {
+            if (i > 0) sb.append('\n');
+            sb.append(lines.get(i));
+        }
+        subTexts.add(sb.toString());
+    }
+
+    private String mmss(int ms) {
+        return String.format(java.util.Locale.US, "%d:%02d", ms / 60000, (ms / 1000) % 60);
     }
 
     /** Streams a remote URL (mp4 / HLS / radio) on the cinema screen. */
@@ -240,16 +324,34 @@ public class CinemaWindow implements WindowContent {
     }
 
     @Override public void update() {
+        if (mp != null && prepared && dur > 0 && !resumeApplied) {
+            resumeApplied = true;
+            if (uri != null) {
+                long rs = host.settings().resumeMs(uri.toString());
+                if (rs > 30000 && rs < dur - 10000) {
+                    try {
+                        mp.seekTo((int) rs);
+                        host.toast(host.activity().getString(R.string.cinema_resume, mmss((int) rs)));
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
         if (++tick % 20 == 0 && mp != null && prepared) {
             try {
                 int np = mp.getCurrentPosition();
                 int nd = mp.getDuration();
                 if (np != pos || nd != dur) { pos = np; dur = nd; chrome.dirty = true; }
+                if (mp.isPlaying() && tick % 180 == 0 && uri != null && pos > 0) {
+                    host.settings().setResumeMs(uri.toString(), pos);
+                }
             } catch (Exception ignored) {}
         }
     }
 
-    @Override public void onClosed() { releaseMp(); }
+    @Override public void onClosed() {
+        if (uri != null && pos > 0) host.settings().setResumeMs(uri.toString(), pos);
+        releaseMp();
+    }
 
     @Override public void onRestored() { video.visible = videoReady; }
 }

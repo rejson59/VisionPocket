@@ -30,7 +30,7 @@ public class PanoramaWindow implements WindowContent {
         this.wm = wm;
         this.ren = ren;
         window = new VpWindows.Window("pano", ren.activity().getString(R.string.win_pano));
-        chrome = new Panel(0, 0, 0, 0, 1.2f, 0.92f, 800f);
+        chrome = new Panel(0, 0, 0, 0, 1.2f, 1.15f, 800f);
         window.addPart(chrome, 0, 0, 0);
         window.attachChrome(chrome);
         window.content = this;

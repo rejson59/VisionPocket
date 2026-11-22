@@ -1960,6 +1960,69 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     @Override public void importSettings() { activity.runOnUiThread(() -> activity.importSettings()); }
 
+    @Override public void openApp(String kind) { glQueue.add(() -> toggleApp(kind)); }
+
+    @Override public void applyScene(String id) { glQueue.add(() -> applySceneNow(id)); }
+
+    @Override public void pickSrt() { activity.runOnUiThread(() -> activity.pickSrt()); }
+
+    /** One-tap desktop layouts (Work / Cinema / Game scenes). */
+    private void applySceneNow(String id) {
+        netApplying = true;
+        java.util.List<VpWindows.Window> all = new java.util.ArrayList<>(wm.list);
+        for (VpWindows.Window w : all) {
+            if ("start".equals(w.kind) || "kb".equals(w.kind) || "calib".equals(w.kind)
+                    || "net".equals(w.kind)) continue;
+            boolean keep = "work".equals(id)
+                    && ("notes".equals(w.kind) || "clock".equals(w.kind) || "mirror".equals(w.kind));
+            keep |= "cinema".equals(id) && "cinema".equals(w.kind);
+            keep |= "game".equals(id) && "game".equals(w.kind);
+            if (!keep) wm.close(w);
+        }
+        if ("work".equals(id)) {
+            placeScene("notes", -1.35f, 0.30f, -2.05f, 1f);
+            placeScene("clock", 1.35f, 0.30f, -2.05f, 1f);
+            placeScene("mirror", 0f, 0.12f, -2.7f, 1.25f);
+            toast(activity.getString(R.string.env_scene_work));
+        } else if ("cinema".equals(id)) {
+            placeScene("cinema", 0f, 0.22f, -2.6f, 1.35f);
+            toast(activity.getString(R.string.env_scene_cinema));
+        } else if ("game".equals(id)) {
+            placeScene("game", 0f, 0.15f, -2.2f, 1.1f);
+            toast(activity.getString(R.string.env_scene_game));
+        }
+        netApplying = false;
+        lastNetStateSent = "";
+    }
+
+    private void placeScene(String kind, float x, float y, float z, float s) {
+        VpWindows.Window w = wm.find(kind);
+        if (w == null) { openWindow(kind); w = wm.find(kind); }
+        if (w == null) return;
+        w.ax = x; w.ay = y; w.az = z;
+        w.ayaw = (float) Math.atan2(-x, -z);
+        w.applyScale(s);
+        w.layout();
+        w.setMinimized(false);
+        wm.focus(w);
+    }
+
+    public void onSrtPicked(Uri u) {
+        if (u == null) return;
+        glQueue.add(() -> {
+            CinemaWindow cw = null;
+            for (VpWindows.Window w : wm.list) {
+                if (w.content instanceof CinemaWindow) { cw = (CinemaWindow) w.content; break; }
+            }
+            if (cw == null) {
+                openWindow("cinema");
+                VpWindows.Window w = wm.find("cinema");
+                if (w != null && w.content instanceof CinemaWindow) cw = (CinemaWindow) w.content;
+            }
+            if (cw != null) cw.loadSubtitles(u);
+        });
+    }
+
     // ================= CameraPipeline.Listener =================
 
     @Override public void onCameraFailed(String reason) {

@@ -36,7 +36,7 @@ public class LauncherWindow implements WindowContent {
         this.wm = wm;
         this.host = host;
         window = new VpWindows.Window("apps", host.activity().getString(R.string.win_apps));
-        chrome = new Panel(0, 0, 0, 0, 1.6f, 1.25f, 800f);
+        chrome = new Panel(0, 0, 0, 0, 1.6f, 1.4f, 800f);
         window.addPart(chrome, 0, 0, 0);
         window.attachChrome(chrome);
         window.content = this;

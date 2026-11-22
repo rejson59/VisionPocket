@@ -158,4 +158,11 @@
     <string name="net_joined">Dołączono do wspólnego pokoju</string>
     <string name="net_left">Opuściłeś pokój</string>
     <string name="net_fail">Nie udało się połączyć — sprawdź IP i Wi-Fi</string>
+    <string name="timer_done">Koniec czasu!</string>
+    <string name="cinema_resume">Wznawiam od %1$s</string>
+    <string name="env_scene_work">💼 Praca</string>
+    <string name="env_scene_cinema">🎬 Kino</string>
+    <string name="env_scene_game">🎯 Gra</string>
+    <string name="diag_share">📤  Wyślij raport</string>
+    <string name="share_title">Wyślij raport VisionPocket</string>
 </resources>

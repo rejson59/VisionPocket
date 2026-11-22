@@ -28,7 +28,7 @@ public class SettingsWindow implements WindowContent {
         this.wm = wm;
         this.host = host;
         window = new VpWindows.Window("settings", host.activity().getString(R.string.win_settings));
-        chrome = new Panel(0, 0, 0, 0, 1.5f, 1.42f, 800f);
+        chrome = new Panel(0, 0, 0, 0, 1.75f, 1.62f, 800f);
         window.addPart(chrome, 0, 0, 0);
         window.attachChrome(chrome);
         window.content = this;
@@ -110,7 +110,7 @@ public class SettingsWindow implements WindowContent {
         };
         for (int i = 0; i < 10; i++) {
             int y = 8 + i * 98;
-            RectF row = new RectF(40, y, 1400, y + 90);
+            RectF row = new RectF(40, y, 1360, y + 90);
             c.drawRoundRect(row, 22, 22, pRow);
             c.drawText(labels[i], 70, y + 58, pLabel);
             if (values[i] != null) c.drawText(values[i], 920, y + 60, pValue);

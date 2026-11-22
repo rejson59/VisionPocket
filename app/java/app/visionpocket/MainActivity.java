@@ -94,8 +94,12 @@ public class MainActivity extends Activity {
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build())
                 .build();
-        chimeId = soundPool.load(this, R.raw.chime, 1);
-        clickId = soundPool.load(this, R.raw.click, 1);
+        try {
+            chimeId = soundPool.load(this, R.raw.chime, 1);
+            clickId = soundPool.load(this, R.raw.click, 1);
+        } catch (Exception e) {
+            // sounds are optional — never let them kill the launch
+        }
     }
 
     private void startVr(boolean withCamera) {
@@ -268,6 +272,15 @@ public class MainActivity extends Activity {
             i.addCategory(Intent.CATEGORY_OPENABLE);
             i.setType("*/*");
             startActivityForResult(i, 21);
+        } catch (Exception ignored) {}
+    }
+
+    public void pickSrt() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("*/*");
+        try {
+            startActivityForResult(i, 22);
         } catch (Exception ignored) {}
     }
 

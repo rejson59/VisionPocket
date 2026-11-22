@@ -25,6 +25,9 @@ public class VpWindows {
         void pickImage();
         void exportSettings();
         void importSettings();
+        void openApp(String kind);
+        void applyScene(String id);
+        void pickSrt();
         float headYaw();
         void openStreamDialog();
         void applyFrontCam();
@@ -169,6 +172,13 @@ public class VpWindows {
             pStripFocused.setColor(0xFF2A2E36);
             c.drawRoundRect(0, 0, p.pw, STRIP_PX + 40, 44, 44, focused ? pStripFocused : pStrip);
             c.drawRect(0, STRIP_PX - 40, p.pw, STRIP_PX, focused ? pStripFocused : pStrip);
+            if (focused) {
+                Paint acc = new Paint();
+                acc.setColor(0x668FA3C8);
+                acc.setStyle(Paint.Style.STROKE);
+                acc.setStrokeWidth(4f);
+                c.drawRoundRect(2, 2, p.pw - 2, p.ph - 2, 44, 44, acc);
+            }
             c.drawText(title, 34f, 72f, pTitle);
             for (Panel.Button b : p.buttons) {
                 if (!"chrome_close".equals(b.id) && !"chrome_min".equals(b.id)) continue;

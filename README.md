@@ -21,7 +21,14 @@ lub pięknych środowisk wirtualnych.
 steel accent; **no neon, no glow spam**. Environments reworked: **Studio** (clean
 dark gradient) and **Dusk** (soft, desaturated horizon) replace the old flashy ones.
 
-## Features / Funkcje (v1.8)
+## ✅ Launch-crash fixed (v1.9)
+
+**All previous builds crashed at startup on real phones** — the packaging step
+compressed `res/raw/*.wav`, which `SoundPool` cannot open (needs mmap-able,
+stored entries). v1.9 fixes the pipeline (raw/media/arsc are now STORED, with a
+hard post-build assertion) and guards sound loading at runtime.
+
+## Features / Funkcje (v1.9)
 
 - 🖼️ **Spatial windows (Windows-style)** — apps open as floating windows with a title
   bar, ✕ close and — minimize; bring to front, cascade placement, minimized windows
@@ -70,6 +77,13 @@ dark gradient) and **Dusk** (soft, desaturated horizon) replace the old flashy o
 - ⚙️ **Settings window** — IPD, lens distortion strength, resolution, passthrough
   on/off/rotation/zoom
 - 🌐 **PL + EN**, boot chime + click sounds, status bar (time · FPS · battery)
+- 🏠 **Home dashboard** — big clock, battery, six quick-launch tiles on boot
+- 🎬 **Cinema: subtitles (CC)** — load any `.srt` for local or streamed video
+- 🎬 **Cinema: resume** — continues where you left off (per video, restart-safe)
+- 💼 **Scene presets** — Work / Cinema / Game desktop layouts, one tap (🌍)
+- 🎙 **Countdown timers** — 5/15/25 min + chime, next to the stopwatch (🕒)
+- 📤 **Share diagnostics** — one-tap text report to any messenger (🩺)
+- 🖌 **UI polish** — focused-window hairline, cleaner window chrome
 - 🌐 **Shared room (Wi-Fi multiplayer)** — phones on the same Wi-Fi share the
   same window layout: open, move, scale and minimize windows together, see
   each other\'s gaze as small diamond markers. One phone hosts, others join by
@@ -101,11 +115,11 @@ dark gradient) and **Dusk** (soft, desaturated horizon) replace the old flashy o
 - 🎯 **IPD calibration wizard** — line pattern test with −/+ and it remembers
 - ⌨ **Keyboard shift key**, ✨ **click haptics** (toggle), **🛡 crash-guard** —
   the app recovers gracefully and keeps your settings
-- 📦 **Tiny APK (~0.29 MB)** — includes two games + LAN multiplayer — native Android (Java + OpenGL ES 2.0), instant startup
+- 📦 **Tiny APK (~0.31 MB)** — includes two games + LAN multiplayer — native Android (Java + OpenGL ES 2.0), instant startup
 
 ## Install / Instalacja
 
-1. Download `release/VisionPocket-v1.8.apk` (Android 8.0+ / API 26+) — or grab it from the [Releases](../../releases) page.
+1. Download `release/VisionPocket-v1.9.apk` (Android 8.0+ / API 26+) — or grab it from the [Releases](../../releases) page. **v1.9 is the first version that actually launches on a phone.**
 2. Allow "install unknown apps" for your file manager, then tap the APK.
 3. Run → **START VR** → grant camera permission (or "Start without camera").
 4. Insert the phone into any phone-VR headset, **landscape** orientation.
@@ -178,7 +192,7 @@ tools/
   build_apk.py                 full APK build pipeline (no Gradle, no SDK download)
   vp-debug.keystore            debug signing key (passphrase: visionpocket)
 release/
-  VisionPocket-v1.8.apk        signed, ready-to-install build
+  VisionPocket-v1.9.apk        signed, ready-to-install build
 ```
 
 ## Build from source / Budowanie ze źródeł
@@ -186,8 +200,8 @@ release/
 See [BUILDING.md](BUILDING.md). Short version:
 
 ```bash
-python3 tools/build_apk.py --version-name 1.8 --version-code 10
-# -> release/VisionPocket-v1.8.apk
+python3 tools/build_apk.py --version-name 1.9 --version-code 11
+# -> release/VisionPocket-v1.9.apk
 ```
 
 The pipeline (aapt2 → javac → D8 → aligned zip → apksigner) needs **no Android SDK

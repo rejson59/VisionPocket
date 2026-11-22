@@ -36,6 +36,9 @@ public class EnvWindow implements WindowContent {
         chrome.add("bright_m", 60, 620 + s, 260, 700 + s);
         chrome.add("bright_p", 280, 620 + s, 480, 700 + s);
         chrome.add("autorec", 520, 620 + s, 860, 700 + s);
+        chrome.add("sc_work", 60, 730 + s, 320, 850 + s);
+        chrome.add("sc_cinema", 340, 730 + s, 600, 850 + s);
+        chrome.add("sc_game", 620, 730 + s, 880, 850 + s);
         chrome.click = b -> onClick(b.id);
 
         pBg.setColor(0xFF101113);
@@ -106,6 +109,20 @@ public class EnvWindow implements WindowContent {
                     + host.activity().getString(ar ? R.string.common_on : R.string.common_off);
             HomeSceneUtil.drawCentered(c, t, r, valP);
         }
+
+        // scene presets
+        String[] scIds = {"sc_work", "sc_cinema", "sc_game"};
+        int[] scLabels = {R.string.env_scene_work, R.string.env_scene_cinema, R.string.env_scene_game};
+        for (int i = 0; i < 3; i++) {
+            Panel.Button b = null;
+            for (Panel.Button bb : p.buttons) if (scIds[i].equals(bb.id)) b = bb;
+            if (b == null) continue;
+            RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
+            c.drawRoundRect(r, 20, 20, b.hover ? pBtnHover : pBtn);
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
+            c.drawRoundRect(r, 20, 20, pBorder);
+            HomeSceneUtil.drawCentered(c, host.activity().getString(scLabels[i]), r, valP);
+        }
     }
 
     @Override public void draw(Canvas c, Panel p, boolean focused) { drawBody(c, p, focused); }
@@ -114,6 +131,9 @@ public class EnvWindow implements WindowContent {
         if ("bright_m".equals(id)) { host.settings().setBrightness(host.settings().brightness() - 0.1f); chrome.dirty = true; return; }
         if ("bright_p".equals(id)) { host.settings().setBrightness(host.settings().brightness() + 0.1f); chrome.dirty = true; return; }
         if ("autorec".equals(id)) { host.settings().setAutoRecenter(!host.settings().autoRecenter()); chrome.dirty = true; return; }
+        if ("sc_work".equals(id)) { host.applyScene("work"); return; }
+        if ("sc_cinema".equals(id)) { host.applyScene("cinema"); return; }
+        if ("sc_game".equals(id)) { host.applyScene("game"); return; }
         if (id.startsWith("env")) {
             int m = Integer.parseInt(id.substring(3));
             host.settings().setEnvMode(m);

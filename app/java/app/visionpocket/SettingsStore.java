@@ -89,6 +89,32 @@ public class SettingsStore {
     public int best2048() { return prefs.getInt("best2048", 0); }
     public void setBest2048(int v) { prefs.edit().putInt("best2048", v).apply(); }
 
+    /** Watch position per video URI (resume playback). */
+    public long resumeMs(String key) {
+        try { return new org.json.JSONObject(prefs.getString("resume", "{}")).optLong(key, 0); }
+        catch (Exception e) { return 0; }
+    }
+
+    public void setResumeMs(String key, long ms) {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject(prefs.getString("resume", "{}"));
+            o.put(key, ms);
+            while (o.length() > 20) {
+                String oldest = null;
+                long ov = Long.MAX_VALUE;
+                java.util.Iterator<String> it = o.keys();
+                while (it.hasNext()) {
+                    String k = it.next();
+                    long v = o.optLong(k, 0);
+                    if (v < ov) { ov = v; oldest = k; }
+                }
+                if (oldest == null) break;
+                o.remove(oldest);
+            }
+            prefs.edit().putString("resume", o.toString()).apply();
+        } catch (Exception ignored) {}
+    }
+
     /** Sticky notes list (JSON array of strings). */
     public String notesJson() { return prefs.getString("notesJson", "[]"); }
     public void setNotesJson(String s) { prefs.edit().putString("notesJson", s == null ? "[]" : s).apply(); }

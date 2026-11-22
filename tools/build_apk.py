@@ -264,12 +264,20 @@ def main():
 
     # 4. pack aligned APK
     aligned = os.path.join(build, "aligned.apk")
+    NO_COMPRESS_EXTS = (".wav", ".mp2", ".mp3", ".ogg", ".aac", ".flac", ".mp4", ".mkv",
+                        ".webm", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ttf", ".otf")
     zin = zipfile.ZipFile(base_apk)
     entries = []
     for info in zin.infolist():
         data = zin.read(info.filename)
-        align = 4 if info.filename == "resources.arsc" else None
-        entries.append((info.filename, data, info.filename != "resources.arsc", align))
+        # SoundPool/AssetManager need raw media and resources.arsc STORED (mmap-able);
+        # preserve whatever aapt2 decided, and never compress raw/media entries.
+        stored = (info.compress_type == zipfile.ZIP_STORED
+                  or info.filename == "resources.arsc"
+                  or info.filename.startswith("res/raw/")
+                  or info.filename.lower().endswith(NO_COMPRESS_EXTS))
+        align = 4 if stored else None
+        entries.append((info.filename, data, not stored, align))
     zin.close()
     entries.append(("classes.dex", open(dex_out, "rb").read(), True, None))
     print("==> Packing aligned APK")
@@ -286,6 +294,16 @@ def main():
          "--out", final, aligned], "apksigner sign")
 
     run([java, "-jar", apksignerjar, "verify", "--print-certs", final], "apksigner verify")
+
+    # hard check: raw media + resources.arsc must stay STORED (SoundPool mmap)
+    fz = zipfile.ZipFile(final)
+    bad = [i.filename for i in fz.infolist()
+           if (i.filename.startswith("res/raw/") or i.filename == "resources.arsc")
+           and i.compress_type != zipfile.ZIP_STORED]
+    fz.close()
+    if bad:
+        raise SystemExit("COMPRESSED entries that must be STORED: " + ", ".join(bad))
+    print("raw/arsc compression check: OK (stored)")
 
     size = os.path.getsize(final)
     print(f"\n✓ DONE: {final} ({size/1e6:.2f} MB)")

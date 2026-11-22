@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.opengl.GLES20;
@@ -27,15 +28,20 @@ public class DiagWindow implements WindowContent {
     private final Paint pBg = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pHead = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pVal = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pBtn = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pBtnHover = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     public DiagWindow(VpWindows wm, VpWindows.WmHost host) {
         this.wm = wm;
         this.host = host;
         window = new VpWindows.Window("diag", host.activity().getString(R.string.win_diag));
-        chrome = new Panel(0, 0, 0, 0, 1.55f, 1.3f, 800f);
+        chrome = new Panel(0, 0, 0, 0, 1.55f, 1.4f, 800f);
         window.addPart(chrome, 0, 0, 0);
         window.attachChrome(chrome);
         window.content = this;
+        chrome.add("share", 880, 856 + VpWindows.STRIP_PX, 1200, 956 + VpWindows.STRIP_PX);
+        chrome.click = b -> onClick(b.id);
 
         pBg.setColor(0xFF101113);
         pHead.setColor(0xFFA9B2C4);
@@ -45,6 +51,11 @@ public class DiagWindow implements WindowContent {
         pVal.setColor(0xFFDCE3F2);
         pVal.setTextSize(40f);
         pVal.setTextAlign(Paint.Align.LEFT);
+        pBtn.setColor(0xFF1F2126);
+        pBtnHover.setColor(0xFF2E323A);
+        pBorder.setStyle(Paint.Style.STROKE);
+        pBorder.setStrokeWidth(3f);
+        pBorder.setColor(0xFF2E3138);
 
         wm.placeNew(window);
     }
@@ -121,12 +132,58 @@ public class DiagWindow implements WindowContent {
             c.drawText(host.activity().getString(R.string.diag_storage, gb), x, y, pVal);
         } catch (Exception ignored) {}
 
+        for (Panel.Button b : p.buttons) {
+            RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
+            c.drawRoundRect(r, 20, 20, b.hover ? pBtnHover : pBtn);
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
+            c.drawRoundRect(r, 20, 20, pBorder);
+            HomeSceneUtil.drawCentered(c, host.activity().getString(R.string.diag_share), r, pVal);
+        }
+
         if (++tick % 120 == 0) chrome.dirty = true;
+    }
+
+    private String buildReport() {
+        StringBuilder sb = new StringBuilder("VisionPocket report\n");
+        sb.append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
+                .append(" · Android ").append(Build.VERSION.RELEASE)
+                .append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
+        sb.append("GPU: ").append(GLES20.glGetString(GLES20.GL_RENDERER)).append('\n');
+        DisplayMetrics dm = host.activity().getResources().getDisplayMetrics();
+        sb.append(dm.widthPixels).append("x").append(dm.heightPixels)
+                .append(" @ ").append(dm.densityDpi).append(" dpi · ")
+                .append(Math.round(host.fps())).append(" FPS\n");
+        SensorManager sm = (SensorManager) host.activity().getSystemService(android.content.Context.SENSOR_SERVICE);
+        sb.append("sensors: rot-vector ")
+                .append(sm.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null ? "ok" : "MISSING")
+                .append(", gyro ").append(sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE) != null ? "ok" : "MISSING")
+                .append(", compass ").append(sm.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null ? "ok" : "MISSING").append('\n');
+        boolean cam = host.activity().checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+        boolean mic = host.activity().checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        sb.append("perms: camera ").append(cam ? "ok" : "MISSING")
+                .append(", mic ").append(mic ? "ok" : "MISSING").append('\n');
+        SettingsStore st = host.settings();
+        sb.append("IPD ").append(st.ipd()).append(" · res ").append(Math.round(st.resScale() * 100)).append('%');
+        try {
+            sb.append(" · v").append(host.activity().getPackageManager()
+                    .getPackageInfo(host.activity().getPackageName(), 0).versionName);
+        } catch (Exception ignored) {}
+        return sb.toString();
     }
 
     @Override public void draw(Canvas c, Panel p, boolean focused) { drawBody(c, p, focused); }
 
-    @Override public void onClick(String id) {}
+    @Override public void onClick(String id) {
+        if ("share".equals(id)) {
+            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_SEND);
+            i.setType("text/plain");
+            i.putExtra(android.content.Intent.EXTRA_TEXT, buildReport());
+            try {
+                host.activity().startActivity(android.content.Intent.createChooser(i,
+                        host.activity().getString(R.string.share_title)));
+            } catch (Exception ignored) {}
+        }
+    }
 
     @Override public void onBodyClick(Panel part) {}
 

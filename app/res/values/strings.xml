@@ -161,4 +161,11 @@
     <string name="net_joined">Joined the shared room</string>
     <string name="net_left">Left the room</string>
     <string name="net_fail">Could not connect — check the IP and Wi-Fi</string>
+    <string name="timer_done">Timer finished!</string>
+    <string name="cinema_resume">Resuming at %1$s</string>
+    <string name="env_scene_work">💼 Work</string>
+    <string name="env_scene_cinema">🎬 Cinema</string>
+    <string name="env_scene_game">🎯 Game</string>
+    <string name="diag_share">📤  Share report</string>
+    <string name="share_title">Send VisionPocket report</string>
 </resources>

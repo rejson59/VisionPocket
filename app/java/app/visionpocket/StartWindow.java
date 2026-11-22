@@ -4,52 +4,80 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
 
-/** Start window: welcome, tips and quick actions (opened automatically at boot). */
+import java.util.Calendar;
+
+/** Home dashboard: big clock, battery, quick-launch tiles and recenter/close. */
 public class StartWindow implements WindowContent {
 
     public final VpWindows.Window window;
     private final Panel chrome;
     private final VpWindows wm;
     private final VpWindows.WmHost host;
+    private int lastSecond = -1;
+
+    private static final String[] TILE_KINDS = {"cinema", "photos", "mirror", "notes", "clock", "game"};
+    private static final String[] TILE_ICONS = {"🎬", "🖼", "▣", "📝", "🕒", "🎯"};
 
     private final Paint pBg = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pTile = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pTileHover = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pBtn = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pBtnHover = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pTime = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pDate = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pBattery = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pIcon = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pLabel = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pText = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint pHead = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     public StartWindow(VpWindows wm, VpWindows.WmHost host) {
         this.wm = wm;
         this.host = host;
         window = new VpWindows.Window("start", host.activity().getString(R.string.win_start));
-        chrome = new Panel(0, 0, 0, 0, 1.45f, 1.3f, 800f);
+        chrome = new Panel(0, 0, 0, 0, 1.5f, 1.35f, 800f);
         window.addPart(chrome, 0, 0, 0);
         window.attachChrome(chrome);
         window.content = this;
 
         int s = VpWindows.STRIP_PX;
-        chrome.add("do_recenter", 60, 620 + s, 560, 760 + s);
-        chrome.add("close", 600, 620 + s, 1100, 760 + s);
+        String[] ids = {"cinema", "photos", "mirror", "notes", "clock", "game"};
+        for (int i = 0; i < 6; i++) {
+            int col = i % 3, row = i / 3;
+            int x0 = 60 + col * 370;
+            int y0 = 290 + row * 190;
+            chrome.add(ids[i], x0, y0 + s, x0 + 340, y0 + 160 + s);
+        }
+        chrome.add("do_recenter", 60, 700 + s, 560, 840 + s);
+        chrome.add("close", 640, 700 + s, 1140, 840 + s);
         chrome.click = b -> onClick(b.id);
 
         pBg.setColor(0xFF101113);
+        pTile.setColor(0xFF1A1C21);
+        pTileHover.setColor(0xFF2E323A);
         pBtn.setColor(0xFF1F2126);
         pBtnHover.setColor(0xFF2E323A);
         pBorder.setStyle(Paint.Style.STROKE);
         pBorder.setStrokeWidth(3f);
         pBorder.setColor(0xFF2E3138);
-        pLabel.setColor(0xFFE8ECF5);
-        pLabel.setTextSize(56f);
+        pTime.setColor(0xFFE8ECF5);
+        pTime.setTextSize(120f);
+        pTime.setFakeBoldText(true);
+        pTime.setTextAlign(Paint.Align.LEFT);
+        pDate.setColor(0xFF9BA0AB);
+        pDate.setTextSize(44f);
+        pDate.setTextAlign(Paint.Align.LEFT);
+        pBattery.setColor(0xFF9BA0AB);
+        pBattery.setTextSize(44f);
+        pBattery.setTextAlign(Paint.Align.RIGHT);
+        pIcon.setTextSize(62f);
+        pIcon.setTextAlign(Paint.Align.CENTER);
+        pLabel.setColor(0xFFDCE3F2);
+        pLabel.setTextSize(40f);
         pLabel.setTextAlign(Paint.Align.CENTER);
-        pText.setColor(0xFFB4B9C4);
-        pText.setTextSize(44f);
+        pText.setColor(0xFF8A909C);
+        pText.setTextSize(38f);
         pText.setTextAlign(Paint.Align.LEFT);
-        pHead.setColor(0xFFA9B2C4);
-        pHead.setTextSize(50f);
-        pHead.setFakeBoldText(true);
-        pHead.setTextAlign(Paint.Align.LEFT);
 
         wm.placeNew(window);
     }
@@ -59,30 +87,47 @@ public class StartWindow implements WindowContent {
         pBg.setColor(0xFF101113);
         c.drawRoundRect(0, 0, p.pw, p.ph - s, 0, 0, pBg);
 
-        c.drawText(host.activity().getString(R.string.start_tagline), 60f, 80f, pHead);
-        String[] tips = {
-                host.activity().getString(R.string.start_tip1),
-                host.activity().getString(R.string.start_tip2),
-                host.activity().getString(R.string.start_tip3),
-                host.activity().getString(R.string.start_tip4)
+        Calendar cal = Calendar.getInstance();
+        String time = String.format(java.util.Locale.getDefault(), "%02d:%02d",
+                cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE));
+        c.drawText(time, 60f, 170f, pTime);
+        String date = String.format(java.util.Locale.getDefault(), "%tA, %1$te %1$tB", cal);
+        c.drawText(date, 62f, 240f, pDate);
+        c.drawText("🔋 " + host.activity().batteryPct() + "%", p.pw - 60f, 170f, pBattery);
+
+        String[] labels = {
+                host.activity().getString(R.string.win_cinema),
+                host.activity().getString(R.string.win_photos),
+                host.activity().getString(R.string.win_mirror),
+                host.activity().getString(R.string.win_notes),
+                host.activity().getString(R.string.win_clock),
+                host.activity().getString(R.string.win_game)
         };
-        float y = 170f;
-        for (String t : tips) {
-            c.drawText("•  " + t, 60f, y, pText);
-            y += 92f;
+        for (int i = 0; i < 6; i++) {
+            Panel.Button b = null;
+            for (Panel.Button bb : p.buttons) if (TILE_KINDS[i].equals(bb.id)) b = bb;
+            if (b == null) continue;
+            RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
+            c.drawRoundRect(r, 24, 24, b.hover ? pTileHover : pTile);
+            pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
+            c.drawRoundRect(r, 24, 24, pBorder);
+            c.drawText(TILE_ICONS[i], r.centerX(), r.centerY() - 8f - (pIcon.ascent() + pIcon.descent()) / 2f, pIcon);
+            c.drawText(labels[i], r.centerX(), r.centerY() + 52f, pLabel);
         }
 
         for (Panel.Button b : p.buttons) {
-            Paint fill = b.hover ? pBtnHover : pBtn;
-            RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
-            c.drawRoundRect(r, 26, 26, fill);
-            pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
-            c.drawRoundRect(r, 26, 26, pBorder);
-            String label = "close".equals(b.id)
-                    ? host.activity().getString(R.string.common_close)
-                    : host.activity().getString(R.string.common_recenter);
-            HomeSceneUtil.drawCentered(c, label, r, pLabel);
+            if ("do_recenter".equals(b.id) || "close".equals(b.id)) {
+                RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
+                c.drawRoundRect(r, 26, 26, b.hover ? pBtnHover : pBtn);
+                pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
+                c.drawRoundRect(r, 26, 26, pBorder);
+                String label = "close".equals(b.id)
+                        ? host.activity().getString(R.string.common_close)
+                        : host.activity().getString(R.string.common_recenter);
+                HomeSceneUtil.drawCentered(c, label, r, pLabel);
+            }
         }
+        c.drawText(host.activity().getString(R.string.start_tip1), 62f, 930f, pText);
     }
 
     @Override public void draw(Canvas c, Panel p, boolean focused) { drawBody(c, p, focused); }
@@ -90,11 +135,18 @@ public class StartWindow implements WindowContent {
     @Override public void onClick(String id) {
         if ("do_recenter".equals(id)) host.recenterView();
         else if ("close".equals(id)) wm.close(window);
+        else host.openApp(id);
     }
 
     @Override public void onBodyClick(Panel part) {}
 
-    @Override public void update() {}
+    @Override public void update() {
+        int sec = Calendar.getInstance().get(Calendar.SECOND);
+        if (sec != lastSecond) {
+            lastSecond = sec;
+            chrome.dirty = true;
+        }
+    }
 
     @Override public void onClosed() {}
 

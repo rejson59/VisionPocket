@@ -45,7 +45,7 @@ public class GameWindow implements WindowContent {
         this.wm = wm;
         this.ren = ren;
         window = new VpWindows.Window("game", ren.activity().getString(R.string.win_game));
-        chrome = new Panel(0, 0, 0, 0, 1.25f, 0.42f, 800f);
+        chrome = new Panel(0, 0, 0, 0, 1.25f, 0.5f, 800f);
         window.addPart(chrome, 0, 0, 0);
         window.attachChrome(chrome);
         window.content = this;
