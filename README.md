@@ -1,2 +1,2 @@
 # VisionPocket
-Experience mixed reality without expensive headsets. VisionPocket turns your smartphone into an immersive XR gateway on a budget. Just slip your phone into a low-cost cardboard or plastic headset, launch the app, and explore interactive virtual worlds with camera passthrough. Big tech immersion, pocket-sized budget!
+You don't need to pay hundreds of dollars for a high-end headset to experience mixed reality. Welcome to VisionPocket – the smart, budget-friendly way to turn your smartphone into an immersive XR gateway. Slip your phone into a low-cost cardboard or plastic headset, fire up the app, and dive into a world of interactive virtual environments and camera-based passthrough. Big tech immersion, pocket-sized budget!
