@@ -109,4 +109,12 @@
     <string name="calib_hint1">Adjust IPD until the lines look sharp and single.</string>
     <string name="calib_hint2">Settings → Calibrate anytime; IPD is remembered.</string>
     <string name="calib_done">✓  Done</string>
+    <string name="win_diag">Diagnostics</string>
+    <string name="diag_dev">Device</string>
+    <string name="diag_disp">Display</string>
+    <string name="diag_sens">Sensors</string>
+    <string name="diag_perm">Permissions</string>
+    <string name="diag_misc">Settings</string>
+    <string name="diag_storage">Free storage: %1$d GB</string>
+    <string name="env_auto_recenter">🔄 Auto-recenter</string>
 </resources>

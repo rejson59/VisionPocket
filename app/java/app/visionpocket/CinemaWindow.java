@@ -183,6 +183,9 @@ public class CinemaWindow implements WindowContent {
         chrome.dirty = true;
     }
 
+    /** Called by hardware volume keys when the cinema is focused. */
+    public void nudgeVolume(float d) { setVol(vol + d); }
+
     public void togglePlay() {
         if (mp == null || !prepared) { host.pickVideo(); return; }
         try {

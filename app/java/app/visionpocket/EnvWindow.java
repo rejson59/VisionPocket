@@ -24,15 +24,18 @@ public class EnvWindow implements WindowContent {
         this.wm = wm;
         this.host = host;
         window = new VpWindows.Window("env", host.activity().getString(R.string.win_env));
-        chrome = new Panel(0, 0, 0, 0, 1.15f, 1.0f, 800f);
+        chrome = new Panel(0, 0, 0, 0, 1.15f, 1.24f, 800f);
         window.addPart(chrome, 0, 0, 0);
         window.attachChrome(chrome);
         window.content = this;
 
         int s = VpWindows.STRIP_PX;
-        chrome.add("env0", 60, 16 + s, 860, 216 + s);
-        chrome.add("env1", 60, 236 + s, 860, 436 + s);
-        chrome.add("env2", 60, 456 + s, 860, 656 + s);
+        chrome.add("env0", 60, 16 + s, 860, 196 + s);
+        chrome.add("env1", 60, 216 + s, 860, 396 + s);
+        chrome.add("env2", 60, 416 + s, 860, 596 + s);
+        chrome.add("bright_m", 60, 620 + s, 260, 700 + s);
+        chrome.add("bright_p", 280, 620 + s, 480, 700 + s);
+        chrome.add("autorec", 520, 620 + s, 860, 700 + s);
         chrome.click = b -> onClick(b.id);
 
         pBg.setColor(0xFF0E101A);
@@ -75,11 +78,42 @@ public class EnvWindow implements WindowContent {
             c.drawText(icons[i], r.left + 110f, r.centerY() - (pSym.ascent() + pSym.descent()) / 2f, pSym);
             c.drawText(labels[i], r.left + 220f, r.centerY() - (pLabel.ascent() + pLabel.descent()) / 2f, pLabel);
         }
+
+        // brightness row
+        float br = host.settings().brightness();
+        Paint valP = new Paint(pLabel);
+        valP.setTextAlign(Paint.Align.CENTER);
+        for (Panel.Button b : p.buttons) {
+            if (!"bright_m".equals(b.id) && !"bright_p".equals(b.id)) continue;
+            RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
+            c.drawRoundRect(r, 18, 18, b.hover ? pBtnHover : pBtn);
+            c.drawRoundRect(r, 18, 18, pBorder);
+            c.drawText("bright_m".equals(b.id) ? "−" : "+",
+                    r.centerX(), r.centerY() - (pSym.ascent() + pSym.descent()) / 2f, pSym);
+        }
+        c.drawText("☀ " + String.format(java.util.Locale.US, "%.1f", br), 520f,
+                684f + s, valP);
+
+        // auto recenter toggle
+        boolean ar = host.settings().autoRecenter();
+        for (Panel.Button b : p.buttons) {
+            if (!"autorec".equals(b.id)) continue;
+            RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
+            c.drawRoundRect(r, 18, 18, b.hover ? pBtnHover : (ar ? pBtnActive : pBtn));
+            pBorder.setColor(b.hover ? 0xFF5B8DEF : (ar ? 0xFF5B8DEF : 0xFF39415A));
+            c.drawRoundRect(r, 18, 18, pBorder);
+            String t = host.activity().getString(R.string.env_auto_recenter) + " · "
+                    + host.activity().getString(ar ? R.string.common_on : R.string.common_off);
+            HomeSceneUtil.drawCentered(c, t, r, valP);
+        }
     }
 
     @Override public void draw(Canvas c, Panel p, boolean focused) { drawBody(c, p, focused); }
 
     @Override public void onClick(String id) {
+        if ("bright_m".equals(id)) { host.settings().setBrightness(host.settings().brightness() - 0.1f); chrome.dirty = true; return; }
+        if ("bright_p".equals(id)) { host.settings().setBrightness(host.settings().brightness() + 0.1f); chrome.dirty = true; return; }
+        if ("autorec".equals(id)) { host.settings().setAutoRecenter(!host.settings().autoRecenter()); chrome.dirty = true; return; }
         if (id.startsWith("env")) {
             int m = Integer.parseInt(id.substring(3));
             host.settings().setEnvMode(m);

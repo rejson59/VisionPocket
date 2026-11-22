@@ -56,9 +56,10 @@ public class SettingsWindow implements WindowContent {
                 case 8: chrome.add("haptics", 700, y + 4 + s, 1370, y + 90 + s); break;
             }
         }
-        chrome.add("shot", 40, 928 + s, 440, 1024 + s);
-        chrome.add("calib", 480, 928 + s, 880, 1024 + s);
-        chrome.add("do_recenter", 920, 928 + s, 1370, 1024 + s);
+        chrome.add("shot", 40, 928 + s, 340, 1024 + s);
+        chrome.add("calib", 360, 928 + s, 660, 1024 + s);
+        chrome.add("diag", 680, 928 + s, 980, 1024 + s);
+        chrome.add("do_recenter", 1000, 928 + s, 1370, 1024 + s);
         chrome.click = b -> onClick(b.id);
 
         pBg.setColor(0xFF0E101A);
@@ -114,7 +115,7 @@ public class SettingsWindow implements WindowContent {
         }
 
         for (Panel.Button b : p.buttons) {
-            if ("shot".equals(b.id) || "calib".equals(b.id) || "do_recenter".equals(b.id)) continue;
+            if ("shot".equals(b.id) || "calib".equals(b.id) || "diag".equals(b.id) || "do_recenter".equals(b.id)) continue;
             int rowTop = 8, rowBot = 98;
             for (int i = 0; i < 9; i++) {
                 int y = 8 + i * 98;
@@ -135,7 +136,7 @@ public class SettingsWindow implements WindowContent {
         }
 
         for (Panel.Button b : p.buttons) {
-            if (!"shot".equals(b.id) && !"calib".equals(b.id) && !"do_recenter".equals(b.id)) continue;
+            if (!"shot".equals(b.id) && !"calib".equals(b.id) && !"diag".equals(b.id) && !"do_recenter".equals(b.id)) continue;
             RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
             c.drawRoundRect(r, 20, 20, b.hover ? pBtnHover : pBtn);
             pBorder.setColor(b.hover ? 0xFF5B8DEF : 0xFF39415A);
@@ -143,6 +144,7 @@ public class SettingsWindow implements WindowContent {
             String t;
             if ("shot".equals(b.id)) t = host.activity().getString(R.string.settings_shot);
             else if ("calib".equals(b.id)) t = "🎯  " + host.activity().getString(R.string.calib_open);
+            else if ("diag".equals(b.id)) t = "🩺  " + host.activity().getString(R.string.win_diag);
             else t = host.activity().getString(R.string.common_recenter);
             HomeSceneUtil.drawCentered(c, t, r, pValue);
         }
@@ -208,6 +210,7 @@ public class SettingsWindow implements WindowContent {
             case "do_recenter": host.recenterView(); break;
             case "shot": host.vrScreenshot(); break;
             case "calib": host.openCalibration(); break;
+            case "diag": host.openDiagnostics(); break;
         }
         chrome.dirty = true;
     }

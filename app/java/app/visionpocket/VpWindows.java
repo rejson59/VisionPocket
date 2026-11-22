@@ -28,6 +28,8 @@ public class VpWindows {
         void applyFrontCam();
         void vrScreenshot();
         void openCalibration();
+        void openDiagnostics();
+        float fps();
     }
 
     // ============================ Window ============================

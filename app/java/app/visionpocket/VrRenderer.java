@@ -59,7 +59,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     // --- programs ---
     private int pPanel, pCam, pDist, pColor, pEnvSpace, pEnvHorizon;
     private int uPanelMVP, aPanelPos, aPanelUV, uPanelTex, uPanelAlpha, uPanelMode;
-    private int uCamMVP, aCamPos, aCamUV, uCamTex, uCamAngle, uCamZoom, uCamOverscan, uCamMode, uCamSide;
+    private int uCamMVP, aCamPos, aCamUV, uCamTex, uCamAngle, uCamZoom, uCamOverscan, uCamMode, uCamSide, uCamBright;
     private int aDistPos, uDistScene, uDistEyeCenter, uDistHalf, uDistAspect, uDistK1, uDistK2;
     private int uColorMVP, aColorPos, uColorColor;
     private int uSpaceMVP, aSpacePos, aSpaceUV, uSpaceTime;
@@ -200,6 +200,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             "uniform float uOverscan;\n" +
             "uniform float uMode;\n" +
             "uniform float uSide;\n" +
+            "uniform float uBright;\n" +
             "varying vec2 vUV;\n" +
             MODE_GLSL +
             "void main(){\n" +
@@ -210,7 +211,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             "  c = c / (uZoom * uOverscan);\n" +
             "  vec2 suv = vec2(0.5) + c;\n" +
             "  if (abs(uSide) > 0.5) { suv.x = (suv.x + (uSide < 0.0 ? 0.0 : 1.0)) * 0.5; }\n" +
-            "  gl_FragColor = texture2D(uCam, applyMode(suv, uMode));\n" +
+            "  vec4 col = texture2D(uCam, applyMode(suv, uMode));\n" +
+            "  gl_FragColor = vec4(col.rgb * uBright, col.a);\n" +
             "}\n";
 
     private static final String FS_SPACE =
@@ -352,6 +354,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         uCamOverscan = GLES20.glGetUniformLocation(pCam, "uOverscan");
         uCamMode = GLES20.glGetUniformLocation(pCam, "uMode");
         uCamSide = GLES20.glGetUniformLocation(pCam, "uSide");
+        uCamBright = GLES20.glGetUniformLocation(pCam, "uBright");
 
         pEnvSpace = GlUtil.createProgram(VS_TEX, FS_SPACE);
         uSpaceMVP = GLES20.glGetUniformLocation(pEnvSpace, "uMVP");
@@ -537,8 +540,9 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 boolean passthroughLive = envMode == 0 && settings.passthrough()
                         && cameraAllowed && camFrameEver;
                 if (passthroughLive) {
-                    drawCamQuad(camTex, ptxCx, ptxCy, ptxCz, ptxYaw, ptxW, ptxH,
-                            settings.rotDeg(), settings.zoom(), OVERSCAN, pv, 0f);
+                    drawCamBright(camTex, ptxCx, ptxCy, ptxCz, ptxYaw, ptxW, ptxH,
+                            settings.rotDeg(), settings.zoom(), OVERSCAN, pv,
+                            settings.brightness());
                 } else if (envMode == 2) {
                     drawEnvQuad(pEnvHorizon, uHorMVP, aHorPos, aHorUV, uHorTime, pv);
                 } else {
@@ -874,6 +878,35 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glUniform1f(uCamOverscan, overscan);
         GLES20.glUniform1f(uCamMode, mode);
         GLES20.glUniform1f(uCamSide, side);
+        GLES20.glUniform1f(uCamBright, 1f);
+        GLES20.glEnableVertexAttribArray(aCamPos);
+        GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
+        GLES20.glEnableVertexAttribArray(aCamUV);
+        GLES20.glVertexAttribPointer(aCamUV, 2, GLES20.GL_FLOAT, false, 8, Panel.quadUv());
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        GLES20.glEnable(GLES20.GL_BLEND);
+    }
+
+    private void drawCamBright(int tex, float cx, float cy, float cz, float yaw,
+                             float w, float h, float angleDeg, float zoom, float overscan,
+                             float[] pv, float bright) {
+        Matrix.setIdentityM(tmpM2, 0);
+        Matrix.translateM(tmpM2, 0, cx, cy, cz);
+        if (yaw != 0f) Matrix.rotateM(tmpM2, 0, (float) Math.toDegrees(yaw), 0f, 1f, 0f);
+        Matrix.scaleM(tmpM2, 0, w, h, 1f);
+        Matrix.multiplyMM(tmpM3, 0, pv, 0, tmpM2, 0);
+        GLES20.glDisable(GLES20.GL_BLEND);
+        GLES20.glUseProgram(pCam);
+        GLES20.glUniformMatrix4fv(uCamMVP, 1, false, tmpM3, 0);
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, tex);
+        GLES20.glUniform1i(uCamTex, 0);
+        GLES20.glUniform1f(uCamAngle, (float) Math.toRadians(angleDeg));
+        GLES20.glUniform1f(uCamZoom, zoom);
+        GLES20.glUniform1f(uCamOverscan, overscan);
+        GLES20.glUniform1f(uCamMode, 0f);
+        GLES20.glUniform1f(uCamSide, 0f);
+        GLES20.glUniform1f(uCamBright, bright);
         GLES20.glEnableVertexAttribArray(aCamPos);
         GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
         GLES20.glEnableVertexAttribArray(aCamUV);
@@ -901,6 +934,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glUniform1f(uCamOverscan, 1f);
         GLES20.glUniform1f(uCamMode, 0f);
         GLES20.glUniform1f(uCamSide, side);
+        GLES20.glUniform1f(uCamBright, 1f);
         GLES20.glEnableVertexAttribArray(aCamPos);
         GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, p.mesh.pos);
         GLES20.glEnableVertexAttribArray(aCamUV);
@@ -1279,6 +1313,18 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         }
     }
 
+    /** Hardware volume buttons: cinema volume when the cinema is focused. */
+    public void postVolume(boolean up) {
+        glQueue.add(() -> {
+            VpWindows.Window w = wm.focusedWindow();
+            if (w != null && w.content instanceof CinemaWindow) {
+                ((CinemaWindow) w.content).nudgeVolume(up ? 0.1f : -0.1f);
+            } else {
+                activity.runOnUiThread(() -> activity.systemVolume(up));
+            }
+        });
+    }
+
     private void routeButton(VpWindows.Window w, String id) {
         if ("chrome_close".equals(id)) {
             wm.close(w);
@@ -1326,6 +1372,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             case "env": new EnvWindow(wm, this); break;
             case "settings": new SettingsWindow(wm, this); break;
             case "calib": new CalibrationWindow(wm, this); break;
+            case "diag": new DiagWindow(wm, this); break;
             case "start":
                 if (wm.find("start") == null) new StartWindow(wm, this);
                 break;
@@ -1337,6 +1384,10 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     public void onVrStarted() {
         glQueue.add(() -> {
             loadSession();
+            if (settings.autoRecenter()) {
+                new android.os.Handler(android.os.Looper.getMainLooper())
+                        .postDelayed(() -> glQueue.add(() -> head.recenter()), 600);
+            }
             openWindow("start");
             setMsg(activity.getString(R.string.start_toast), 6000);
             if (System.currentTimeMillis() - settings.lastCrash() < 60000) {
@@ -1359,6 +1410,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             }
             org.json.JSONObject root = new org.json.JSONObject();
             root.put("w", arr);
+            String lv = settings.lastVideo();
+            if (lv != null && !lv.isEmpty()) root.put("v", lv);
             org.json.JSONObject d = new org.json.JSONObject();
             d.put("x", (double) dock.cx); d.put("y", (double) dock.cy);
             d.put("z", (double) dock.cz); d.put("a", (double) dock.yaw);
@@ -1390,6 +1443,20 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                     wm.focus(w);
                     if (o.optBoolean("m")) w.setMinimized(true);
                 }
+            }
+            String lv = root.optString("v", "");
+            if (!lv.isEmpty() && wm.find("cinema") != null) {
+                try {
+                    Uri vu = Uri.parse(lv);
+                    VpWindows.Window cw = wm.find("cinema");
+                    wm.focus(cw);
+                    if (cw.content instanceof CinemaWindow) {
+                        CinemaWindow cwi = (CinemaWindow) cw.content;
+                        cwi.video.oesTex = vidTex;
+                        ensureVideoSurface();
+                        cwi.loadVideo(vu, vidST, vidSurface);
+                    }
+                } catch (Exception ignored) {}
             }
             org.json.JSONObject d = root.optJSONObject("d");
             if (d != null) {
@@ -1426,6 +1493,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             cw.video.oesTex = vidTex;
             ensureVideoSurface();
             cw.loadVideo(u, vidST, vidSurface);
+            settings.setLastVideo(u.toString());
         });
     }
 
@@ -1627,6 +1695,13 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         });
     }
 
+    @Override
+    public void openDiagnostics() {
+        glQueue.add(() -> {
+            if (wm.find("diag") == null) new DiagWindow(wm, this);
+        });
+    }
+
     public void applyFrontCam() {
         glQueue.add(() -> {
             camera.front = settings.frontCam();
@@ -1705,6 +1780,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     @Override public SettingsStore settings() { return settings; }
     @Override public MainActivity activity() { return activity; }
     @Override public void toast(String msg) { setMsg(msg, 2600); }
+    @Override public float fps() { return fps; }
     @Override public void recenterView() { head.recenter(); }
     @Override public float headYaw() {
         float[] f = head.forward(new float[3]);

@@ -178,6 +178,12 @@ public class MainActivity extends Activity {
                     }
                     return true;
                 }
+                if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN) {
+                    if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                        renderer.postVolume(code == KeyEvent.KEYCODE_VOLUME_UP);
+                    }
+                    return true;
+                }
             }
         }
         return super.dispatchKeyEvent(event);
@@ -200,6 +206,17 @@ public class MainActivity extends Activity {
             }
         }
         return super.dispatchGenericMotionEvent(event);
+    }
+
+    public void systemVolume(boolean up) {
+        try {
+            android.media.AudioManager am =
+                    (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+            am.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC,
+                    up ? android.media.AudioManager.ADJUST_RAISE
+                       : android.media.AudioManager.ADJUST_LOWER,
+                    android.media.AudioManager.FLAG_SHOW_UI);
+        } catch (Exception ignored) {}
     }
 
     /** Runtime mic permission for the music visualizer (fallback works without it). */

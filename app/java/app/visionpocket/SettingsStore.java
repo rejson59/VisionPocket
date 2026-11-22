@@ -69,6 +69,18 @@ public class SettingsStore {
     public String session() { return prefs.getString("session", ""); }
     public void setSession(String s) { prefs.edit().putString("session", s == null ? "" : s).apply(); }
 
+    /** Passthrough brightness multiplier (0.5..1.5). */
+    public float brightness() { return prefs.getFloat("bright", 1f); }
+    public void setBrightness(float v) { prefs.edit().putFloat("bright", clamp(v, 0.5f, 1.5f)).apply(); }
+
+    /** Auto-recenter right after VR starts. */
+    public boolean autoRecenter() { return prefs.getBoolean("autoRec", true); }
+    public void setAutoRecenter(boolean b) { prefs.edit().putBoolean("autoRec", b).apply(); }
+
+    /** Last cinema video URI (persistable permission), restored with the session. */
+    public String lastVideo() { return prefs.getString("lastVideo", ""); }
+    public void setLastVideo(String s) { prefs.edit().putString("lastVideo", s == null ? "" : s).apply(); }
+
     private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
     private static float clamp(float v, float lo, float hi) { return Math.max(lo, Math.min(hi, v)); }
 }
