@@ -60,9 +60,10 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private int pPanel, pCam, pDist, pColor, pEnvDome, pMask;
     private int uPanelMVP, aPanelPos, aPanelUV, uPanelTex, uPanelAlpha, uPanelMode;
     private int uCamMVP, aCamPos, aCamUV, uCamTex, uCamAngle, uCamZoom, uCamOverscan, uCamMode, uCamSide, uCamBright, uCamFit, uCamMirror;
-    private int aDistPos, uDistScene, uDistEyeCenter, uDistHalf, uDistAspect, uDistK1, uDistK2;
-    private int uMaskHalf, aMaskPos;
-    public boolean surfSwapped = false;
+    private int aDistPos, uDistScene, uDistEyeCenter, uDistAspect, uDistK1, uDistK2;
+    private int uDistScale, uDistOffset, uMaskScale, uMaskOffset, aMaskPos;
+    /** true = eye viewports stacked (surface portrait); false = side-by-side. */
+    public boolean stacked = false;
     private int uColorMVP, aColorPos, uColorColor;
     private int uDomeRight, uDomeUp, uDomeFwd, uDomeTanX, uDomeTanY, uDomeMode, uDomeTime;
     private int aDomePos;
@@ -280,12 +281,14 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
         pDist = GlUtil.createProgram(Shaders.VS_DIST, Shaders.FS_DIST);
         pMask = GlUtil.createProgram(Shaders.VS_DIST, Shaders.FS_MASK);
-        uMaskHalf = GLES20.glGetUniformLocation(pMask, "uHalf");
         aMaskPos = GLES20.glGetAttribLocation(pMask, "aPos");
+        uMaskScale = GLES20.glGetUniformLocation(pMask, "uScale");
+        uMaskOffset = GLES20.glGetUniformLocation(pMask, "uOffset");
         aDistPos = GLES20.glGetAttribLocation(pDist, "aPos");
         uDistScene = GLES20.glGetUniformLocation(pDist, "uScene");
         uDistEyeCenter = GLES20.glGetUniformLocation(pDist, "uEyeCenter");
-        uDistHalf = GLES20.glGetUniformLocation(pDist, "uHalf");
+        uDistScale = GLES20.glGetUniformLocation(pDist, "uScale");
+        uDistOffset = GLES20.glGetUniformLocation(pDist, "uOffset");
         uDistAspect = GLES20.glGetUniformLocation(pDist, "uAspect");
         uDistK1 = GLES20.glGetUniformLocation(pDist, "uK1");
         uDistK2 = GLES20.glGetUniformLocation(pDist, "uK2");
@@ -327,27 +330,19 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
-        scrW = width;
-        scrH = height;
-        // guard: some devices deliver a surface in NATURAL (portrait) size
-        // while the activity is landscape — swap so the cardboard view is
-        // always built from the physical landscape panel.
-        try {
-            int rot = activity.getWindowManager().getDefaultDisplay().getRotation();
-            boolean landscape = rot == android.view.Surface.ROTATION_90
-                    || rot == android.view.Surface.ROTATION_270;
-            if (landscape && height > width) {
-                scrW = height;
-                scrH = width;
-                surfSwapped = true;
-            } else {
-                surfSwapped = false;
-            }
-        } catch (Exception e) {
-            surfSwapped = false;
-        }
-        eyeW = Math.max(8, scrW / 2);
-        eyeH = Math.max(8, scrH);
+        scrW = Math.max(8, width);
+        scrH = Math.max(8, height);
+        // THE cardboard invariant: the two eye viewports must be laid out
+        // along the SURFACE's LONG axis. On devices that deliver a portrait
+        // surface for the landscape activity, the compositor rotates the
+        // buffer 90 deg onto the landscape panel — a side-by-side layout in
+        // the buffer would land on the panel's short axis and each lens
+        // would see a mix of both eyes (the "triangle" bug). Stacking the
+        // eyes in a portrait buffer maps them onto the panel's left/right
+        // halves after the compositor rotation.
+        stacked = scrH > scrW;
+        eyeW = Math.max(8, stacked ? scrW : scrW / 2);
+        eyeH = Math.max(8, stacked ? scrH / 2 : scrH);
         eyeAspect = (float) eyeW / (float) eyeH;
         Matrix.perspectiveM(proj, 0, FOVY_DEG, eyeAspect, 0.05f, 80f);
 
@@ -462,6 +457,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         boolean useFbo = settings.distortionPct() > 0;
         int tgtW = useFbo ? fboW : scrW;
         int tgtH = useFbo ? fboH : scrH;
+        boolean st = stacked;   // FBO keeps the surface's shape, so same layout
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, useFbo ? fbo : 0);
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
         GLES20.glDepthFunc(GLES20.GL_LEQUAL);
@@ -470,12 +466,19 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
         int panoProj = settings.panoProj();
 
-        eyeAspect = (float) (tgtW / 2) / (float) tgtH;
+        eyeAspect = st ? (float) tgtW / (float) (tgtH / 2) : (float) (tgtW / 2) / (float) tgtH;
         Matrix.perspectiveM(proj, 0, FOVY_DEG, eyeAspect, 0.05f, 80f);
 
         for (int eye = 0; eye < 2; eye++) {
-            int vx = eye == 0 ? 0 : tgtW / 2;
-            GLES20.glViewport(vx, 0, tgtW / 2, tgtH);
+            int vx, vy, vw, vh;
+            if (st) {
+                vx = 0; vw = tgtW; vh = tgtH / 2;
+                vy = eye == 0 ? tgtH / 2 : 0;
+            } else {
+                vy = 0; vh = tgtH; vw = tgtW / 2;
+                vx = eye == 0 ? 0 : tgtW / 2;
+            }
+            GLES20.glViewport(vx, vy, vw, vh);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
 
             float eyeX = (eye == 0 ? -1f : 1f) * settings.ipd() / 2000f;
@@ -576,10 +579,10 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                         reticle.width, reticle.height, reticleScale, 0.97f, headPv, 0f);
             }
 
-            // VR screenshot (left eye half of the current framebuffer)
+            // VR screenshot (one eye's viewport of the current framebuffer)
             if (shotRequested && eye == 1) {
                 shotRequested = false;
-                captureShot(0, 0, tgtW / 2, tgtH);
+                captureShot(vx, vy, vw, vh);
             }
         }
 
@@ -594,7 +597,13 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             GLES20.glEnableVertexAttribArray(aMaskPos);
             GLES20.glVertexAttribPointer(aMaskPos, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
             for (int eye = 0; eye < 2; eye++) {
-                GLES20.glUniform1f(uMaskHalf, eye == 0 ? -0.5f : 0.5f);
+                if (stacked) {
+                    GLES20.glUniform2f(uMaskScale, 1f, 0.5f);
+                    GLES20.glUniform2f(uMaskOffset, 0f, eye == 0 ? 0.5f : -0.5f);
+                } else {
+                    GLES20.glUniform2f(uMaskScale, 0.5f, 1f);
+                    GLES20.glUniform2f(uMaskOffset, eye == 0 ? -0.5f : 0.5f, 0f);
+                }
                 GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
             }
             GLES20.glDisable(GLES20.GL_BLEND);
@@ -617,8 +626,15 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glEnableVertexAttribArray(aDistPos);
         GLES20.glVertexAttribPointer(aDistPos, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
         for (int eye = 0; eye < 2; eye++) {
-            GLES20.glUniform1f(uDistHalf, eye == 0 ? -0.5f : 0.5f);
-            GLES20.glUniform2f(uDistEyeCenter, eye == 0 ? 0.25f : 0.75f, 0.5f);
+            if (stacked) {
+                GLES20.glUniform2f(uDistScale, 1f, 0.5f);
+                GLES20.glUniform2f(uDistOffset, 0f, eye == 0 ? 0.5f : -0.5f);
+                GLES20.glUniform2f(uDistEyeCenter, 0.5f, eye == 0 ? 0.25f : 0.75f);
+            } else {
+                GLES20.glUniform2f(uDistScale, 0.5f, 1f);
+                GLES20.glUniform2f(uDistOffset, eye == 0 ? -0.5f : 0.5f, 0f);
+                GLES20.glUniform2f(uDistEyeCenter, eye == 0 ? 0.25f : 0.75f, 0.5f);
+            }
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         }
         }
@@ -2087,7 +2103,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         return "v" + ver + " · dist " + settings.distortionPct() + "%"
                 + " · IPD " + settings.ipd() + "mm"
                 + " · viewRot " + settings.viewRot()
-                + " · surf " + scrW + "x" + scrH + (surfSwapped ? "!" : "")
+                + " · surf " + scrW + "x" + scrH + (stacked ? "·S" : "·L")
                 + " · " + Math.round(fps) + " fps";
     }
 
