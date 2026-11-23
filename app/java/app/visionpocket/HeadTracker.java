@@ -8,72 +8,98 @@ import android.hardware.SensorManager;
 import android.opengl.Matrix;
 
 /**
- * Head tracking v2 — full quaternion rewrite.
+ * Head tracking v3 — thread-safe, noise-limited.
  *
- * Chain (applied to a head-frame vector, right to left):
- *   head --qRoll--> head' --qMountBasis--> device --qSensor--> android world
- *        --qG--> GL world --qRecenter--> yaw-corrected GL world
+ * The v2.0 design had two real-device defects, both fixed here:
+ *  1. DATA RACES: the sensor thread and the GL thread read/wrote the same
+ *     scratch quaternions (target/tmpA/tmpB) and matrices concurrently —
+ *     torn quaternions render as violent shaking. Fixed with a single lock
+ *     and immutable publication: the sensor thread composes into a BACK
+ *     buffer and publishes its reference; the GL thread only ever reads a
+ *     published, never-mutated snapshot.
+ *  2. NOISE PASS-THROUGH: per-event lerp factor 0.45 at 100-500 Hz events
+ *     means effectively no smoothing (raw gyro noise reached the screen).
+ *     Fixed with a TIME-CONSTANT filter: alpha = 1 - exp(-dt/tau), tau 55 ms,
+ *     so the response is identical at any sampling rate. The accelerometer
+ *     is low-passed (EMA) before the mount calibration uses it.
  *
- * Design goals (learned from real-device failures):
- *  - no matrix lerp / re-orthonormalization (that pipeline corrupted slowly);
- *    nlerp on quaternions instead
- *  - recenter is SELF-VERIFYING: both candidate yaw signs are tested against
- *    the forward vector, the one that maps it nearest to -Z wins — no sign
- *    conventions to guess
- *  - the mount basis is built from the ACCELEROMETER (physical up), never from
- *    display-rotation tables; calibration auto-runs on the first gravity sample
- *    (the v1.9.5/1.9.6 race) and on every VR start
- *  - live diagnostics: yaw/pitch/roll, mount residual, sensor age
+ * Everything else from v2.0 stays: quaternion chain, self-verifying recenter,
+ * gravity mount basis with residual self-check, first-sample calibration.
  */
 public class HeadTracker implements SensorEventListener {
 
     public interface RecenterListener { void onRecenter(float deltaYaw); }
 
     private final SensorManager sensorManager;
-    private final Context appCtx;
     private Sensor rotSensor;
     public boolean hasSensor = false;
 
-    // quaternions, [w, x, y, z]
+    private final Object lock = new Object();
+
+    // quaternions [w, x, y, z]
     private final float[] qSensor = unit();    // device -> android world
     private final float[] qMount = unit();     // head -> device (gravity basis)
-    private final float[] qRoll = unit();      // head roll steps (viewRot)
+    private final float[] qRoll = unit();      // user roll steps (viewRot)
     private final float[] qRecenter = unit();  // yaw-only view correction
-    private final float[] qFinal = unit();     // head -> gl (smoothed)
-    private static final float[] Q_G = gf();   // android world -> gl (fixed)
+    private final float[] qFinal = unit();     // smoothed head -> gl
 
-    private final float[] acc = new float[3];
+    private static final float[] Q_G = gf();   // android world -> gl (fixed)
+    private static float[] gf() { return new float[]{0.70710678f, -0.70710678f, 0f, 0f}; }
+
+    private static final float TAU_MS = 55f;   // smoothing time constant
+    private static final float ACC_EMA = 0.25f;
+
+    private final float[] accF = new float[3]; // low-passed accelerometer
     private boolean accValid = false;
     private boolean calibrated = false;
     private float mountResidualDeg = 999f;
     private long lastRotVecMs = 0;
+    private long lastEventNs = 0;
+
+    // snapshot pool: 16 buffer pairs, round-robin; a writer NEVER overwrites
+    // the currently-published slot, and a full cycle takes >> one frame, so a
+    // GL thread holding the published reference can never see a torn matrix.
+    private static final int POOL = 16;
+    private final float[][] poolRot = new float[POOL][16];
+    private final float[][] poolView = new float[POOL][16];
+    private int poolIdx = 0;
+    private volatile float[] publishedRot;
+    private volatile float[] publishedView;
+    private final float[] liveRot = new float[16];
 
     private final float[] target = unit();
     private final float[] tmpA = unit();
     private final float[] tmpB = unit();
 
-    private final float[] rotation = new float[16]; // head -> gl (matrix)
-    private final float[] view = new float[16];     // gl -> head
-
-    private final float[] fwd = new float[3];
     private RecenterListener listener;
     private SettingsStore settings;
 
     private static float[] unit() { return new float[]{1f, 0f, 0f, 0f}; }
 
-    /** android(X east, Y north, Z up) -> GL(x right, y up, z back): -90 deg about X. */
-    private static float[] gf() { return new float[]{0.70710678f, -0.70710678f, 0f, 0f}; }
-
     public HeadTracker(Context ctx) {
-        appCtx = ctx;
         sensorManager = (SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
         rotSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         if (rotSensor == null) {
             rotSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR);
         }
         hasSensor = rotSensor != null;
-        Matrix.setIdentityM(rotation, 0);
-        Matrix.setIdentityM(view, 0);
+        Matrix.setIdentityM(liveRot, 0);
+        Matrix.setIdentityM(poolRot[0], 0);
+        Matrix.setIdentityM(poolView[0], 0);
+        publishedRot = poolRot[0];
+        publishedView = poolView[0];
+    }
+
+    /** Writes q into the next free pool slot and publishes it. Call under lock. */
+    private void publish(float[] q) {
+        for (int i = 0; i < POOL; i++) {
+            poolIdx = (poolIdx + 1) % POOL;
+            if (poolRot[poolIdx] != publishedRot) break;   // never touch the live slot
+        }
+        qToMatrix(q, poolRot[poolIdx]);
+        Matrix.transposeM(poolView[poolIdx], 0, poolRot[poolIdx], 0);
+        publishedRot = poolRot[poolIdx];
+        publishedView = poolView[poolIdx];
     }
 
     public void setRecenterListener(RecenterListener l) { listener = l; }
@@ -95,7 +121,7 @@ public class HeadTracker implements SensorEventListener {
         sensorManager.unregisterListener(this);
     }
 
-    // ================= quaternion math =================
+    // ================= quaternion math (pure, no shared state) =================
 
     private static void qMul(float[] a, float[] b, float[] out) {
         float w = a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3];
@@ -106,24 +132,13 @@ public class HeadTracker implements SensorEventListener {
     }
 
     private static void qAxis(float[] out, float ax, float ay, float az, float rad) {
-        float s = (float) Math.sin(rad / 2f);
         float len = (float) Math.sqrt(ax * ax + ay * ay + az * az);
         if (len < 1e-8f) { out[0] = 1; out[1] = out[2] = out[3] = 0; return; }
+        float s = (float) Math.sin(rad / 2f);
         out[0] = (float) Math.cos(rad / 2f);
         out[1] = ax / len * s;
         out[2] = ay / len * s;
         out[3] = az / len * s;
-    }
-
-    private static void qRot(float[] q, float x, float y, float z, float[] out) {
-        // out = q * v * q^-1  (efficient form)
-        float qx = q[1], qy = q[2], qz = q[3], qw = q[0];
-        float tx = 2f * (qy * z - qz * y);
-        float ty = 2f * (qz * x - qx * z);
-        float tz = 2f * (qx * y - qy * x);
-        out[0] = x + qw * tx + qy * tz - qz * ty;
-        out[1] = y + qw * ty + qz * tx - qx * tz;
-        out[2] = z + qw * tz + qx * ty - qy * tx;
     }
 
     private static void qNormalize(float[] q) {
@@ -145,7 +160,6 @@ public class HeadTracker implements SensorEventListener {
         m[15] = 1f;
     }
 
-    /** Column-major 4x4 (rotation only) -> quaternion. */
     private static void matrixToQuat(float[] m, float[] q) {
         float tr = m[0] + m[5] + m[10];
         if (tr > 0f) {
@@ -178,142 +192,167 @@ public class HeadTracker implements SensorEventListener {
 
     // ================= calibration & mount =================
 
-    /** Builds the head->device quaternion from the accelerometer (physical up). */
     private void calibrate() {
-        float ax = acc[0], ay = acc[1], az = acc[2];
+        float ax = accF[0], ay = accF[1], az = accF[2];
         float len = (float) Math.sqrt(ax * ax + ay * ay + az * az);
-        if (len < 5f || len > 15f) return;   // not a trustworthy gravity reading
+        if (len < 5f || len > 15f) return;
         ax /= len; ay /= len; az /= len;
 
-        // back = out of the screen (+Z device, toward the eyes in a viewer)
-        float bx = 0f, by = 0f, bz = 1f;
-        // right = up x back  (right-handed: right x up = back)
-        float rx = ay * bz - az * by;
+        float bx = 0f, by = 0f, bz = 1f;              // back = out of the screen
+        float rx = ay * bz - az * by;                  // right = up x back
         float ry = az * bx - ax * bz;
         float rz = ax * by - ay * bx;
         float rl = (float) Math.sqrt(rx * rx + ry * ry + rz * rz);
-        if (rl < 0.1f) return;               // up parallel to back — undefined
+        if (rl < 0.1f) return;
         rx /= rl; ry /= rl; rz /= rl;
-        // re-orthogonalize: up = back x right
-        float ux = by * rz - bz * ry;
+        float ux = by * rz - bz * ry;                  // up = back x right
         float uy = bz * rx - bx * rz;
         float uz = bx * ry - by * rx;
 
         float[] m = new float[16];
         Matrix.setIdentityM(m, 0);
-        m[0] = rx; m[1] = ry; m[2] = rz;     // column 0: head right  -> device
-        m[4] = ux; m[5] = uy; m[6] = uz;     // column 1: head up
-        m[8] = bx; m[9] = by; m[10] = bz;    // column 2: head back
-
+        m[0] = rx; m[1] = ry; m[2] = rz;
+        m[4] = ux; m[5] = uy; m[6] = uz;
+        m[8] = bx; m[9] = by; m[10] = bz;
         matrixToQuat(m, qMount);
         calibrated = true;
 
-        // self-check residual: head up after the full chain should be gl up
-        compose(target);
-        qRot(target, 0f, 1f, 0f, tmpA);
+        // residual self-check: head up through the full chain vs world up (0,1,0)
+        float qx = target[1], qy = target[2], qz = target[3], qw = target[0];
+        float tyx = 2f * (qy * 0f - qz * 1f);      // t = 2 * qv x (0,1,0)
+        float tyy = 2f * (qz * 0f - qx * 0f);
+        float tyz = 2f * (qx * 1f - qy * 0f);
+        float ou = 1f + qw * tyy + qy * tyz - qz * tyx;   // y of rotated up
         mountResidualDeg = (float) Math.toDegrees(Math.acos(
-                Math.max(-1f, Math.min(1f, tmpA[1]))));
+                Math.max(-1f, Math.min(1f, ou))));
     }
 
-    /** Rebuilds mount (when forced + gravity available) and the roll-steps quaternion. */
     public void refreshMount(boolean force) {
-        if (force && accValid) calibrate();
-        int ex = settings == null ? 0 : settings.viewRot();
-        qAxis(qRoll, 0f, 0f, 1f, (float) Math.toRadians(ex * 90f));
+        synchronized (lock) {
+            if (force && accValid) calibrate();
+            int ex = settings == null ? 0 : settings.viewRot();
+            qAxis(qRoll, 0f, 0f, 1f, (float) Math.toRadians(ex * 90f));
+            composeAndPublish();
+        }
     }
 
-    /** Full chain as one quaternion into `out`. */
-    private void compose(float[] out) {
+    private void composeAndPublish() {
         qMul(qMount, qRoll, tmpA);           // head -> device
         qMul(qSensor, tmpA, tmpB);           // -> android world
         qMul(Q_G, tmpB, tmpA);               // -> gl world
-        qMul(qRecenter, tmpA, out);          // yaw correction
+        qMul(qRecenter, tmpA, target);       // yaw correction
+        publish(target);
     }
 
-    // ================= recenter (self-verifying) =================
+    // ================= recenter (self-verifying, lock-safe) =================
 
-    /** Yaw-only recenter; returns the applied view yaw (listener semantics as before). */
     public float recenter() {
-        forward(fwd);
-        float fx = fwd[0], fz = fwd[2];
-        float a = (float) Math.atan2(fx, -fz);
-        // pick the sign that actually maps the current forward to -Z
-        float[] c1 = unit(), c2 = unit(), v1 = new float[3], v2 = new float[3];
-        qAxis(c1, 0f, 1f, 0f, a);
-        qAxis(c2, 0f, 1f, 0f, -a);
-        qRot(c1, fwd[0], fwd[1], fwd[2], v1);
-        qRot(c2, fwd[0], fwd[1], fwd[2], v2);
-        float d1 = -v1[2], d2 = -v2[2];      // progress toward (0,0,-1)
-        float chosen = d1 >= d2 ? a : -a;
-        qAxis(qRecenter, 0f, 1f, 0f, chosen);
-        // refresh the smoothed orientation immediately
-        compose(target);
-        System.arraycopy(target, 0, qFinal, 0, 4);
-        qToMatrix(qFinal, rotation);
-        Matrix.transposeM(view, 0, rotation, 0);
-        if (listener != null) listener.onRecenter(chosen);
-        return chosen;
+        synchronized (lock) {
+            float fx = -publishedRot[8], fy = -publishedRot[9], fz = -publishedRot[10];
+            float a = (float) Math.atan2(fx, -fz);
+            float[] c1 = unit(), c2 = unit();
+            qAxis(c1, 0f, 1f, 0f, a);
+            qAxis(c2, 0f, 1f, 0f, -a);
+            // rotate forward by each candidate (v' = v + w t + qv x t, t = 2 qv x v)
+            float t1x = 2f * (c1[2] * fz - c1[3] * fy);
+            float t1y = 2f * (c1[3] * fx - c1[1] * fz);
+            float t1z = 2f * (c1[1] * fy - c1[2] * fx);
+            float v1z = fz + c1[0] * t1z + c1[1] * t1y - c1[2] * t1x;
+            float t2x = 2f * (c2[2] * fz - c2[3] * fy);
+            float t2y = 2f * (c2[3] * fx - c2[1] * fz);
+            float t2z = 2f * (c2[1] * fy - c2[2] * fx);
+            float v2z = fz + c2[0] * t2z + c2[1] * t2y - c2[2] * t2x;
+            float chosen = (-v1z) >= (-v2z) ? a : -a;
+            qAxis(qRecenter, 0f, 1f, 0f, chosen);
+            composeAndPublish();
+            if (listener != null) listener.onRecenter(chosen);
+            return chosen;
+        }
     }
 
-    // ================= queries =================
+    // ================= GL-thread queries (lock-free, snapshot reads) =================
 
-    /** Current forward direction (GL world). */
+    /** Current forward direction (GL world) from the published snapshot. */
     public float[] forward(float[] out3) {
-        qRot(qFinal, 0f, 0f, -1f, out3);
+        float[] m = publishedRot;
+        out3[0] = -m[8];
+        out3[1] = -m[9];
+        out3[2] = -m[10];
         return out3;
     }
 
-    /** head -> gl rotation matrix (column-major 4x4), recenter applied. */
-    public float[] rotation() { return rotation; }
+    /** head -> gl rotation matrix (published snapshot; treat as immutable). */
+    public float[] rotation() { return publishedRot; }
 
-    /** view matrix (inverse of rotation()). */
-    public float[] view() { return view; }
-
-    /** Live yaw/pitch/roll in degrees (diagnostics). */
-    public String angles() {
-        forward(fwd);
-        float yaw = (float) Math.toDegrees(Math.atan2(fwd[0], -fwd[2]));
-        float pitch = (float) Math.toDegrees(Math.asin(
-                Math.max(-1f, Math.min(1f, fwd[1]))));
-        float ry = rotation[1], uy = rotation[5]; // column-major: right.y, up.y
-        float roll = (float) Math.toDegrees(Math.atan2(ry, uy));
-        long age = lastRotVecMs == 0 ? -1 : System.currentTimeMillis() - lastRotVecMs;
-        return "yaw " + Math.round(yaw) + "° pitch " + Math.round(pitch)
-                + "° roll " + Math.round(roll) + "° · mount ∠" + Math.round(mountResidualDeg)
-                + "° · rv " + (age < 0 ? "—": age + "ms");
-    }
+    /** view matrix (published snapshot; treat as immutable). */
+    public float[] view() { return publishedView; }
 
     public boolean mountCalibrated() { return calibrated; }
 
-    // ================= sensor events =================
+    /** Live yaw/pitch/roll + health (diagnostics), cheap and race-free. */
+    public String angles() {
+        float[] m = publishedRot;
+        float fx = -m[8], fy = -m[9], fz = -m[10];
+        float yaw = (float) Math.toDegrees(Math.atan2(fx, -fz));
+        float pitch = (float) Math.toDegrees(Math.asin(Math.max(-1f, Math.min(1f, fy))));
+        float roll = (float) Math.toDegrees(Math.atan2(m[1], m[5]));
+        long age = lastRotVecMs == 0 ? -1 : System.currentTimeMillis() - lastRotVecMs;
+        return "yaw " + Math.round(yaw) + "° pitch " + Math.round(pitch)
+                + "° roll " + Math.round(roll) + "° · mount ∠" + Math.round(mountResidualDeg)
+                + "° · rv " + (age < 0 ? "—" : age + "ms");
+    }
+
+    // ================= sensor events (single writer under lock) =================
 
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
             if (event.values.length >= 3) {
-                acc[0] = event.values[0];
-                acc[1] = event.values[1];
-                acc[2] = event.values[2];
-                accValid = true;
-                if (!calibrated) refreshMount(true);   // first gravity sample
+                synchronized (lock) {
+                    if (!accValid) {
+                        accF[0] = event.values[0];
+                        accF[1] = event.values[1];
+                        accF[2] = event.values[2];
+                        accValid = true;
+                    } else {
+                        accF[0] += (event.values[0] - accF[0]) * ACC_EMA;
+                        accF[1] += (event.values[1] - accF[1]) * ACC_EMA;
+                        accF[2] += (event.values[2] - accF[2]) * ACC_EMA;
+                    }
+                    if (!calibrated) {
+                        calibrate();
+                        composeAndPublish();
+                    }
+                }
             }
             return;
         }
         if (event.values.length < 3) return;
-        lastRotVecMs = System.currentTimeMillis();
-        SensorManager.getQuaternionFromVector(tmpA, event.values); // device -> android
-        System.arraycopy(tmpA, 0, qSensor, 0, 4);
 
-        compose(target);
-        // normalized lerp toward the target orientation
-        float t = 0.45f;
-        for (int i = 0; i < 4; i++) qFinal[i] += (target[i] - qFinal[i]) * t;
-        qNormalize(qFinal);
-        // keep sign continuity (avoid flipping to the antipodal quat)
-        if (qFinal[0] < 0) { qFinal[0] = -qFinal[0]; qFinal[1] = -qFinal[1];
-            qFinal[2] = -qFinal[2]; qFinal[3] = -qFinal[3]; }
-        qToMatrix(qFinal, rotation);
-        Matrix.transposeM(view, 0, rotation, 0);
+        long now = System.nanoTime();
+        float dtMs = lastEventNs == 0 ? TAU_MS : (now - lastEventNs) / 1e6f;
+        lastEventNs = now;
+        lastRotVecMs = System.currentTimeMillis();
+
+        synchronized (lock) {
+            SensorManager.getQuaternionFromVector(tmpA, event.values);
+            qSensor[0] = tmpA[0]; qSensor[1] = tmpA[1];
+            qSensor[2] = tmpA[2]; qSensor[3] = tmpA[3];
+
+            // time-constant smoothing: same behavior at any sampling rate
+            float alpha = 1f - (float) Math.exp(-dtMs / TAU_MS);
+            if (alpha > 1f) alpha = 1f;
+            qMul(qMount, qRoll, tmpA);
+            qMul(qSensor, tmpA, tmpB);
+            qMul(Q_G, tmpB, tmpA);
+            qMul(qRecenter, tmpA, target);
+            for (int i = 0; i < 4; i++) qFinal[i] += (target[i] - qFinal[i]) * alpha;
+            qNormalize(qFinal);
+            if (qFinal[0] < 0) { qFinal[0] = -qFinal[0]; qFinal[1] = -qFinal[1];
+                qFinal[2] = -qFinal[2]; qFinal[3] = -qFinal[3]; }
+
+            publish(qFinal);
+        }
     }
 
     @Override

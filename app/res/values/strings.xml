@@ -170,4 +170,10 @@
     <string name="share_title">Send VisionPocket report</string>
     <string name="start_up_ok">✓  Looks straight</string>
     <string name="start_up_flip">↻  Rotate 180°</string>
+    <string name="start_sub_cinema">Films + streams + SRT</string>
+    <string name="start_sub_photos">Your gallery in space</string>
+    <string name="start_sub_mirror">Duplicate the screen</string>
+    <string name="start_sub_notes">Sticky notes, 3D keyboard</string>
+    <string name="start_sub_clock">Clock, stopwatch, timers</string>
+    <string name="start_sub_game">Look + tap reflex game</string>
 </resources>

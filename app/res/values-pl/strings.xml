@@ -167,4 +167,10 @@
     <string name="share_title">Wyślij raport VisionPocket</string>
     <string name="start_up_ok">✓  Obraz prosto</string>
     <string name="start_up_flip">↻  Obróć 180°</string>
+    <string name="start_sub_cinema">Filmy, streamy, napisy</string>
+    <string name="start_sub_photos">Galeria w przestrzeni</string>
+    <string name="start_sub_mirror">Duplikat ekranu</string>
+    <string name="start_sub_notes">Notatki, klawiatura 3D</string>
+    <string name="start_sub_clock">Zegar, stoper, timery</string>
+    <string name="start_sub_game">Refleks: wzrok + tap</string>
 </resources>
