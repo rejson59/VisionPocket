@@ -1,0 +1,29 @@
+{
+  "name": "visionpocket",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "VisionPocket \u2014 VR/MR w Twojej kieszeni: telefon + tani headset, sterowanie d\u0142o\u0144mi.",
+  "scripts": {
+    "prepare:mp": "node scripts/copy-mediapipe.mjs",
+    "dev": "npm run prepare:mp && vite --host 0.0.0.0",
+    "build": "npm run prepare:mp && tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@capacitor/camera": "^8.0.0",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/screen-orientation": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0",
+    "@mediapipe/hands": "0.4.1675469240",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/cli": "^8.6.2",
+    "@types/three": "^0.187.0",
+    "typescript": "^5.9.0",
+    "vite": "^8.3.8"
+  }
+}

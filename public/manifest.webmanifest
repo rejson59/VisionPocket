@@ -1,0 +1,13 @@
+{
+  "name": "VisionPocket",
+  "short_name": "VisionPocket",
+  "description": "VR i MR w Twojej kieszeni — telefon w tanim headsecie, sterowanie dłońmi.",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05070f",
+  "theme_color": "#05070f",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
