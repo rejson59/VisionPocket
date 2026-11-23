@@ -83,6 +83,14 @@ jobs:
               echo "aapt2 niedostępny"
             fi
             echo '```'
+            echo "### Podpis (stały klucz — aktualizacje wchodzą na starą wersję)"
+            echo '```'
+            if [ -x "$BT/apksigner" ]; then
+              "$BT/apksigner" verify --print-certs "$APK" 2>/dev/null | head -4
+            else
+              echo "apksigner niedostępny"
+            fi
+            echo '```'
             echo "### MediaPipe w APK (tryb offline)"
             echo '```'
             unzip -l "$APK" | grep -i mediapipe | awk '{print $1" B  "$4}' | head -12
