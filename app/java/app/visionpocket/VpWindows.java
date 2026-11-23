@@ -29,6 +29,7 @@ public class VpWindows {
         void applyScene(String id);
         void pickSrt();
         String pipelineInfo();
+        String headAngles();
         float headYaw();
         void openStreamDialog();
         void applyFrontCam();

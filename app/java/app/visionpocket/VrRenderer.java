@@ -1972,17 +1972,17 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
     @Override public void pickSrt() { activity.runOnUiThread(() -> activity.pickSrt()); }
 
+    @Override public String headAngles() { return head.angles(); }
+
     @Override public String pipelineInfo() {
         String ver = "";
         try {
             ver = activity.getPackageManager()
                     .getPackageInfo(activity.getPackageName(), 0).versionName;
         } catch (Exception ignored) {}
-        return "v" + ver + " · fbo " + fboW + "x" + fboH
-                + " · dist " + settings.distortionPct() + "%"
+        return "v" + ver + " · dist " + settings.distortionPct() + "%"
                 + " · IPD " + settings.ipd() + "mm"
                 + " · viewRot " + settings.viewRot()
-                + " · mount " + (head.mountCalibrated() ? "ok" : "raw")
                 + " · " + Math.round(fps) + " fps";
     }
 

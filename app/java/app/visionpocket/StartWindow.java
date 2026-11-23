@@ -152,7 +152,8 @@ public class StartWindow implements WindowContent {
             }
         }
         c.drawText(host.activity().getString(R.string.start_tip1), 62f, 920f, pText);
-        c.drawText(host.pipelineInfo(), 62f, 1000f, pStatus);
+        c.drawText(host.pipelineInfo(), 62f, 985f, pStatus);
+        c.drawText(host.headAngles(), 62f, 1040f, pStatus);
     }
 
     @Override public void draw(Canvas c, Panel p, boolean focused) { drawBody(c, p, focused); }
@@ -172,9 +173,11 @@ public class StartWindow implements WindowContent {
 
     @Override public void onBodyClick(Panel part) {}
 
+    private int tick = 0;
+
     @Override public void update() {
         int sec = Calendar.getInstance().get(Calendar.SECOND);
-        if (sec != lastSecond) {
+        if (sec != lastSecond || ++tick % 5 == 0) {  // keep the live angle readout fresh
             lastSecond = sec;
             chrome.dirty = true;
         }
