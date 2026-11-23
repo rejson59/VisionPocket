@@ -28,7 +28,7 @@ compressed `res/raw/*.wav`, which `SoundPool` cannot open (needs mmap-able,
 stored entries). v1.9 fixes the pipeline (raw/media/arsc are now STORED, with a
 hard post-build assertion) and guards sound loading at runtime.
 
-## Features / Funkcje (v1.9)
+## Features / Funkcje (v1.9.6)
 
 - 🖼️ **Spatial windows (Windows-style)** — apps open as floating windows with a title
   bar, ✕ close and — minimize; bring to front, cascade placement, minimized windows

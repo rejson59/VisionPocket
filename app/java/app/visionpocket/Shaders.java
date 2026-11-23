@@ -108,7 +108,13 @@ public final class Shaders {
             "  vec2 uv = uEyeCenter + (q * f) / vec2(uAspect, 1.0) * 0.5;\n" +
             "  uv.x = clamp(uv.x, uEyeCenter.x - 0.499, uEyeCenter.x + 0.499);\n" +
             "  uv.y = clamp(uv.y, 0.001, 0.999);\n" +
-            "  gl_FragColor = texture2D(uScene, uv);\n" +
+            "  vec3 scene = texture2D(uScene, uv).rgb;\n" +
+            "  vec2 b = vec2(0.985, 0.985);\n" +
+            "  float cr = 0.30;\n" +
+            "  vec2 cq = abs(vPos) - b + cr;\n" +
+            "  float d = length(max(cq, vec2(0.0))) + min(max(cq.x, cq.y), 0.0) - cr;\n" +
+            "  float m = 1.0 - smoothstep(-0.02, 0.008, d);\n" +
+            "  gl_FragColor = vec4(scene * m, 1.0);\n" +
             "}\n";
 
     public static final String VS_COLOR =
