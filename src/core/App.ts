@@ -285,7 +285,12 @@ export class App implements AppHost {
 
   requestFiles(): void {
     const input = document.getElementById('files') as HTMLInputElement | null;
-    input?.click();
+    try {
+      input?.click();
+    } catch {
+      /* przeglądarka może zablokować okno bez gestu */
+    }
+    this.toast('Jeśli okno się nie otworzyło: dodaj pliki na ekranie startowym, zanim włożysz telefon do headsetu.', 4200);
   }
 
   openMedia(itemId: string): void {
