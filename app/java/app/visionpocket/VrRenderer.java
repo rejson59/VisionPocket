@@ -57,10 +57,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private final VpWindows wm;
 
     // --- programs ---
-    private int pPanel, pCam, pDist, pColor, pEnvDome;
+    private int pPanel, pCam, pDist, pColor, pEnvDome, pMask;
     private int uPanelMVP, aPanelPos, aPanelUV, uPanelTex, uPanelAlpha, uPanelMode;
     private int uCamMVP, aCamPos, aCamUV, uCamTex, uCamAngle, uCamZoom, uCamOverscan, uCamMode, uCamSide, uCamBright, uCamFit, uCamMirror;
     private int aDistPos, uDistScene, uDistEyeCenter, uDistHalf, uDistAspect, uDistK1, uDistK2;
+    private int uMaskHalf, aMaskPos;
+    public boolean surfSwapped = false;
     private int uColorMVP, aColorPos, uColorColor;
     private int uDomeRight, uDomeUp, uDomeFwd, uDomeTanX, uDomeTanY, uDomeMode, uDomeTime;
     private int aDomePos;
@@ -277,6 +279,9 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         aDomePos = GLES20.glGetAttribLocation(pEnvDome, "aPos");
 
         pDist = GlUtil.createProgram(Shaders.VS_DIST, Shaders.FS_DIST);
+        pMask = GlUtil.createProgram(Shaders.VS_DIST, Shaders.FS_MASK);
+        uMaskHalf = GLES20.glGetUniformLocation(pMask, "uHalf");
+        aMaskPos = GLES20.glGetAttribLocation(pMask, "aPos");
         aDistPos = GLES20.glGetAttribLocation(pDist, "aPos");
         uDistScene = GLES20.glGetUniformLocation(pDist, "uScene");
         uDistEyeCenter = GLES20.glGetUniformLocation(pDist, "uEyeCenter");
@@ -324,8 +329,25 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     public void onSurfaceChanged(GL10 gl, int width, int height) {
         scrW = width;
         scrH = height;
-        eyeW = Math.max(8, width / 2);
-        eyeH = Math.max(8, height);
+        // guard: some devices deliver a surface in NATURAL (portrait) size
+        // while the activity is landscape — swap so the cardboard view is
+        // always built from the physical landscape panel.
+        try {
+            int rot = activity.getWindowManager().getDefaultDisplay().getRotation();
+            boolean landscape = rot == android.view.Surface.ROTATION_90
+                    || rot == android.view.Surface.ROTATION_270;
+            if (landscape && height > width) {
+                scrW = height;
+                scrH = width;
+                surfSwapped = true;
+            } else {
+                surfSwapped = false;
+            }
+        } catch (Exception e) {
+            surfSwapped = false;
+        }
+        eyeW = Math.max(8, scrW / 2);
+        eyeH = Math.max(8, scrH);
         eyeAspect = (float) eyeW / (float) eyeH;
         Matrix.perspectiveM(proj, 0, FOVY_DEG, eyeAspect, 0.05f, 80f);
 
@@ -432,8 +454,15 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             try { mirrorST.updateTexImage(); } catch (Exception ignored) {}
         }
 
-        // --- scene into FBO, once per eye ---
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, fbo);
+        // --- scene render, once per eye ---
+        // v3.3: DIRECT rendering by default (no FBO, no distortion pass):
+        // each eye viewport is literally half the physical screen, so the
+        // cardboard view is correct by construction. FBO + barrel distortion
+        // is used only when the user sets distortion > 0.
+        boolean useFbo = settings.distortionPct() > 0;
+        int tgtW = useFbo ? fboW : scrW;
+        int tgtH = useFbo ? fboH : scrH;
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, useFbo ? fbo : 0);
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
         GLES20.glDepthFunc(GLES20.GL_LEQUAL);
         GLES20.glEnable(GLES20.GL_BLEND);
@@ -441,9 +470,12 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
 
         int panoProj = settings.panoProj();
 
+        eyeAspect = (float) (tgtW / 2) / (float) tgtH;
+        Matrix.perspectiveM(proj, 0, FOVY_DEG, eyeAspect, 0.05f, 80f);
+
         for (int eye = 0; eye < 2; eye++) {
-            int vx = eye == 0 ? 0 : fboW / 2;
-            GLES20.glViewport(vx, 0, fboW / 2, fboH);
+            int vx = eye == 0 ? 0 : tgtW / 2;
+            GLES20.glViewport(vx, 0, tgtW / 2, tgtH);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
 
             float eyeX = (eye == 0 ? -1f : 1f) * settings.ipd() / 2000f;
@@ -544,14 +576,32 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                         reticle.width, reticle.height, reticleScale, 0.97f, headPv, 0f);
             }
 
-            // VR screenshot (before leaving the FBO)
+            // VR screenshot (left eye half of the current framebuffer)
             if (shotRequested && eye == 1) {
                 shotRequested = false;
-                captureShot(fboW / 2, fboH);
+                captureShot(0, 0, tgtW / 2, tgtH);
             }
         }
 
-        // --- distortion pass to the display ---
+        if (!useFbo) {
+            // cardboard mask overlay: black outside the two rounded eye rects
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            GLES20.glViewport(0, 0, scrW, scrH);
+            GLES20.glDisable(GLES20.GL_DEPTH_TEST);
+            GLES20.glEnable(GLES20.GL_BLEND);
+            GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
+            GLES20.glUseProgram(pMask);
+            GLES20.glEnableVertexAttribArray(aMaskPos);
+            GLES20.glVertexAttribPointer(aMaskPos, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
+            for (int eye = 0; eye < 2; eye++) {
+                GLES20.glUniform1f(uMaskHalf, eye == 0 ? -0.5f : 0.5f);
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+            }
+            GLES20.glDisable(GLES20.GL_BLEND);
+        }
+
+        // --- distortion pass to the display (only when distortion > 0) ---
+        if (useFbo) {
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glViewport(0, 0, scrW, scrH);
         GLES20.glDisable(GLES20.GL_DEPTH_TEST);
@@ -570,6 +620,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             GLES20.glUniform1f(uDistHalf, eye == 0 ? -0.5f : 0.5f);
             GLES20.glUniform2f(uDistEyeCenter, eye == 0 ? 0.25f : 0.75f, 0.5f);
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        }
         }
     }
 
@@ -1900,19 +1951,19 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         glQueue.add(() -> shotRequested = true);
     }
 
-    private void captureShot(int w, int h) {
+    private void captureShot(int x, int y, int w, int h) {
         int n = w * h * 4;
         java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocateDirect(n);
-        GLES20.glReadPixels(0, 0, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buf);
+        GLES20.glReadPixels(x, y, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buf);
         buf.rewind();
         final Bitmap eye = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         int[] px = new int[n / 4];
         buf.asIntBuffer().get(px);
-        for (int y = 0; y < h; y++) {
-            int srcRow = h - 1 - y;
-            for (int x = 0; x < w; x++) {
-                int argb = px[srcRow * w + x];
-                eye.setPixel(x, y, (argb & 0xFF000000) | ((argb & 0x00FF0000) >> 8)
+        for (int py = 0; py < h; py++) {
+            int srcRow = h - 1 - py;
+            for (int px2 = 0; px2 < w; px2++) {
+                int argb = px[srcRow * w + px2];
+                eye.setPixel(px2, py, (argb & 0xFF000000) | ((argb & 0x00FF0000) >> 8)
                         | ((argb & 0x0000FF00) << 8) | (argb & 0x000000FF));
             }
         }
@@ -2036,6 +2087,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         return "v" + ver + " · dist " + settings.distortionPct() + "%"
                 + " · IPD " + settings.ipd() + "mm"
                 + " · viewRot " + settings.viewRot()
+                + " · surf " + scrW + "x" + scrH + (surfSwapped ? "!" : "")
                 + " · " + Math.round(fps) + " fps";
     }
 
