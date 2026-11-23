@@ -48,6 +48,7 @@ public class HeadTracker implements SensorEventListener {
     private final float[] tmp4 = new float[16];
     private final float[] acc = new float[3];
     private boolean accValid = false;
+    private boolean calibrated = false;   // gravity basis applied at least once
     private int extraQuarters = -1;
     private SettingsStore settings;
     private int events = 0;
@@ -76,6 +77,7 @@ public class HeadTracker implements SensorEventListener {
         if (!force && ex == extraQuarters) return;
         extraQuarters = ex;
         if (force && accValid) {
+            calibrated = true;
             // up = accelerometer direction (world up expressed in device frame)
             float ax = acc[0], ay = acc[1], az = acc[2];
             float len = (float) Math.sqrt(ax * ax + ay * ay + az * az);
@@ -160,7 +162,14 @@ public class HeadTracker implements SensorEventListener {
                 acc[0] = event.values[0];
                 acc[1] = event.values[1];
                 acc[2] = event.values[2];
+                boolean had = accValid;
                 accValid = true;
+                // RACE FIX: the calibration used to run before the first
+                // accelerometer sample ever arrived (VR start) and was silently
+                // skipped -> identity mount -> the old rotation persisted.
+                // Calibrate as soon as gravity data exists, and re-run when the
+                // user (re)starts VR (phone may have been re-inserted).
+                if (!had || !calibrated) refreshMount(true);
             }
             return;
         }
