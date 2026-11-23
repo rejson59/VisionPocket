@@ -154,11 +154,14 @@ public final class Shaders {
             "  gl_FragColor = vec4(col, 1.0);\n" +
             "}\n";
 
+    /** Eye-quad placement: uScale/uOffset put the unit quad into one half of
+     *  the target (side-by-side or stacked, per the surface's long axis). */
     public static final String VS_DIST =
-            "uniform float uHalf;\n" +
+            "uniform vec2 uScale;\n" +
+            "uniform vec2 uOffset;\n" +
             "attribute vec4 aPos;\n" +
             "varying vec2 vPos;\n" +
-            "void main(){ vPos = aPos.xy; gl_Position = vec4(aPos.x * 0.5 + uHalf, aPos.y, 0.0, 1.0); }\n";
+            "void main(){ vPos = aPos.xy; gl_Position = vec4(aPos.x * uScale.x + uOffset.x, aPos.y * uScale.y + uOffset.y, 0.0, 1.0); }\n";
 
     public static final String FS_DIST =
             "precision mediump float;\n" +
@@ -173,8 +176,7 @@ public final class Shaders {
             "  float r2 = dot(q, q);\n" +
             "  float f = 1.0 + uK1 * r2 + uK2 * r2 * r2;\n" +
             "  vec2 uv = uEyeCenter + (q * f) / vec2(uAspect, 1.0) * 0.5;\n" +
-            "  uv.x = clamp(uv.x, uEyeCenter.x - 0.499, uEyeCenter.x + 0.499);\n" +
-            "  uv.y = clamp(uv.y, 0.001, 0.999);\n" +
+            "  uv = clamp(uv, uEyeCenter - vec2(0.499), uEyeCenter + vec2(0.499));\n" +
             "  vec3 scene = texture2D(uScene, uv).rgb;\n" +
             "  vec2 b = vec2(0.985, 0.985);\n" +
             "  float cr = 0.30;\n" +
