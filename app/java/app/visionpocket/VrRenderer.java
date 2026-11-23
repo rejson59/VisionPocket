@@ -57,13 +57,13 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     private final VpWindows wm;
 
     // --- programs ---
-    private int pPanel, pCam, pDist, pColor, pEnvSpace, pEnvHorizon;
+    private int pPanel, pCam, pDist, pColor, pEnvDome;
     private int uPanelMVP, aPanelPos, aPanelUV, uPanelTex, uPanelAlpha, uPanelMode;
     private int uCamMVP, aCamPos, aCamUV, uCamTex, uCamAngle, uCamZoom, uCamOverscan, uCamMode, uCamSide, uCamBright;
     private int aDistPos, uDistScene, uDistEyeCenter, uDistHalf, uDistAspect, uDistK1, uDistK2;
     private int uColorMVP, aColorPos, uColorColor;
-    private int uSpaceMVP, aSpacePos, aSpaceUV, uSpaceTime;
-    private int uHorMVP, aHorPos, aHorUV, uHorTime;
+    private int uDomeRight, uDomeUp, uDomeFwd, uDomeTanX, uDomeTanY, uDomeMode, uDomeTime;
+    private int aDomePos;
 
     // --- camera passthrough ---
     private int camTex = -1;
@@ -264,17 +264,15 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         uCamSide = GLES20.glGetUniformLocation(pCam, "uSide");
         uCamBright = GLES20.glGetUniformLocation(pCam, "uBright");
 
-        pEnvSpace = GlUtil.createProgram(Shaders.VS_TEX, Shaders.FS_SPACE);
-        uSpaceMVP = GLES20.glGetUniformLocation(pEnvSpace, "uMVP");
-        aSpacePos = GLES20.glGetAttribLocation(pEnvSpace, "aPos");
-        aSpaceUV = GLES20.glGetAttribLocation(pEnvSpace, "aUV");
-        uSpaceTime = GLES20.glGetUniformLocation(pEnvSpace, "uTime");
-
-        pEnvHorizon = GlUtil.createProgram(Shaders.VS_TEX, Shaders.FS_HORIZON);
-        uHorMVP = GLES20.glGetUniformLocation(pEnvHorizon, "uMVP");
-        aHorPos = GLES20.glGetAttribLocation(pEnvHorizon, "aPos");
-        aHorUV = GLES20.glGetAttribLocation(pEnvHorizon, "aUV");
-        uHorTime = GLES20.glGetUniformLocation(pEnvHorizon, "uTime");
+        pEnvDome = GlUtil.createProgram(Shaders.VS_DOME, Shaders.FS_DOME);
+        uDomeRight = GLES20.glGetUniformLocation(pEnvDome, "uRight");
+        uDomeUp = GLES20.glGetUniformLocation(pEnvDome, "uUp");
+        uDomeFwd = GLES20.glGetUniformLocation(pEnvDome, "uFwd");
+        uDomeTanX = GLES20.glGetUniformLocation(pEnvDome, "uTanX");
+        uDomeTanY = GLES20.glGetUniformLocation(pEnvDome, "uTanY");
+        uDomeMode = GLES20.glGetUniformLocation(pEnvDome, "uMode");
+        uDomeTime = GLES20.glGetUniformLocation(pEnvDome, "uTime");
+        aDomePos = GLES20.glGetAttribLocation(pEnvDome, "aPos");
 
         pDist = GlUtil.createProgram(Shaders.VS_DIST, Shaders.FS_DIST);
         aDistPos = GLES20.glGetAttribLocation(pDist, "aPos");
@@ -469,10 +467,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                     drawCamBright(camTex, ptxCx, ptxCy, ptxCz, ptxYaw, ptxW, ptxH,
                             settings.rotDeg(), settings.zoom(), OVERSCAN, pv,
                             settings.brightness());
-                } else if (envMode == 2) {
-                    drawEnvQuad(pEnvHorizon, uHorMVP, aHorPos, aHorUV, uHorTime, pv);
                 } else {
-                    drawEnvQuad(pEnvSpace, uSpaceMVP, aSpacePos, aSpaceUV, uSpaceTime, pv);
+                    drawEnvDome(eyeView, envMode);
                 }
             }
 
@@ -950,22 +946,26 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         return m[2] * x + m[6] * y + m[10] * z + m[14];
     }
 
-    private void drawEnvQuad(int program, int mvpLoc, int posLoc, int uvLoc, int timeLoc, float[] pv) {
-        Matrix.setIdentityM(tmpM2, 0);
-        Matrix.translateM(tmpM2, 0, ptxCx, ptxCy, ptxCz);
-        if (ptxYaw != 0f) Matrix.rotateM(tmpM2, 0, (float) Math.toDegrees(ptxYaw), 0f, 1f, 0f);
-        Matrix.scaleM(tmpM2, 0, ptxW, ptxH, 1f);
-        Matrix.multiplyMM(tmpM3, 0, pv, 0, tmpM2, 0);
-
+    /**
+     * TRUE 360-degree environment. Reconstructs the per-pixel view ray from
+     * the eye-view basis + projection tangents and shades the whole dome, so
+     * the world is visible in every direction (no black void).
+     */
+    private void drawEnvDome(float[] eyeView, float mode) {
         GLES20.glDisable(GLES20.GL_BLEND);
-        GLES20.glUseProgram(program);
-        GLES20.glUniformMatrix4fv(mvpLoc, 1, false, tmpM3, 0);
-        GLES20.glUniform1f(timeLoc, SystemClock.uptimeMillis() / 1000f);
-        GLES20.glEnableVertexAttribArray(posLoc);
-        GLES20.glVertexAttribPointer(posLoc, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
-        GLES20.glEnableVertexAttribArray(uvLoc);
-        GLES20.glVertexAttribPointer(uvLoc, 2, GLES20.GL_FLOAT, false, 8, Panel.quadUv());
+        GLES20.glDepthMask(false);
+        GLES20.glUseProgram(pEnvDome);
+        GLES20.glUniform3f(uDomeRight, eyeView[0], eyeView[1], eyeView[2]);
+        GLES20.glUniform3f(uDomeUp, eyeView[4], eyeView[5], eyeView[6]);
+        GLES20.glUniform3f(uDomeFwd, -eyeView[8], -eyeView[9], -eyeView[10]);
+        GLES20.glUniform1f(uDomeTanX, 1f / proj[0]);
+        GLES20.glUniform1f(uDomeTanY, 1f / proj[5]);
+        GLES20.glUniform1f(uDomeMode, mode);
+        GLES20.glUniform1f(uDomeTime, SystemClock.uptimeMillis() / 1000f);
+        GLES20.glEnableVertexAttribArray(aDomePos);
+        GLES20.glVertexAttribPointer(aDomePos, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        GLES20.glDepthMask(true);
         GLES20.glEnable(GLES20.GL_BLEND);
     }
 

@@ -89,15 +89,21 @@ public class VpWindows {
         public static class Part {
             public final Panel panel;
             public float offX, offY, offZ;
+            public float offYaw;   // per-part yaw offset (rad) - ring layouts
             public float baseW, baseH;
-            public Part(Panel p, float ox, float oy, float oz) {
-                panel = p; offX = ox; offY = oy; offZ = oz;
+            public Part(Panel p, float ox, float oy, float oz, float oyaw) {
+                panel = p; offX = ox; offY = oy; offZ = oz; offYaw = oyaw;
                 baseW = p.width; baseH = p.height;
             }
         }
 
         public void addPart(Panel p, float ox, float oy, float oz) {
-            parts.add(new Part(p, ox, oy, oz));
+            parts.add(new Part(p, ox, oy, oz, 0f));
+        }
+
+        /** Part with its own yaw offset, e.g. tiles arranged around the user. */
+        public void addPartRing(Panel p, float ox, float oy, float oz, float oyaw) {
+            parts.add(new Part(p, ox, oy, oz, oyaw));
         }
 
         /** Attaches the chrome (title strip + close/minimize) to a panel. */
@@ -126,7 +132,7 @@ public class VpWindows {
                 p.cx = ax + pt.offX * s;
                 p.cy = ay + pt.offY * s;
                 p.cz = az + pt.offZ * s;
-                p.yaw = ayaw;
+                p.yaw = ayaw + pt.offYaw;
                 p.width = Math.max(0.15f, pt.baseW * s);
                 p.height = Math.max(0.1f, pt.baseH * s);
             }
