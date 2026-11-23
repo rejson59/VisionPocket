@@ -37,8 +37,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Android SDK (wbudowany w runner)
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls "$ANDROID_HOME" | head -20
 
       - name: Zależności
         run: npm ci
