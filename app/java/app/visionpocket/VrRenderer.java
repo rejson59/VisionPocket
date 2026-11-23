@@ -1052,10 +1052,13 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         float effA = rot90 ? 1f / Math.max(0.001f, camAspect) : camAspect;
         float fitX = effA > eyeAspect ? effA / eyeAspect : 1f;
         float fitY = effA > eyeAspect ? 1f : eyeAspect / Math.max(0.001f, effA);
+        // uniform cover: over-crop slightly so no black wedge can ever appear
+        float cover = Math.max(fitX, fitY) * 1.04f;
+        fitX = cover; fitY = cover;
 
         Matrix.setIdentityM(tmpM2, 0);
-        Matrix.translateM(tmpM2, 0, 0f, 0f, -1f);
-        Matrix.scaleM(tmpM2, 0, 1f / proj[0], 1f / proj[5], 1f);
+        Matrix.translateM(tmpM2, 0, 0f, 0f, -1.02f);
+        Matrix.scaleM(tmpM2, 0, 1.02f / proj[0], 1.02f / proj[5], 1f);
         Matrix.multiplyMM(tmpM3, 0, proj, 0, tmpM2, 0);   // view = identity
 
         GLES20.glDisable(GLES20.GL_BLEND);
