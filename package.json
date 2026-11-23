@@ -1,0 +1,34 @@
+{
+  "name": "visionpocket",
+  "private": true,
+  "version": "0.2.1",
+  "type": "module",
+  "description": "VisionPocket — VR/MR w Twojej kieszeni: telefon + tani headset, sterowanie dłońmi.",
+  "scripts": {
+    "prepare:mp": "node scripts/copy-mediapipe.mjs",
+    "dev": "npm run prepare:mp && vite --host 0.0.0.0",
+    "build": "npm run prepare:mp && tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "smoke": "esbuild tools/smoke/harness.ts --bundle --platform=node --format=esm --outfile=tools/smoke/out.mjs --external:@napi-rs/canvas --define:__APP_VERSION__=\\\"0.0.0-smoke\\\" --log-level=warning && node tools/smoke/out.mjs",
+    "screens": "node tools/smoke/screens.mjs"
+  },
+  "dependencies": {
+    "@capacitor/camera": "^8.0.0",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/screen-orientation": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0",
+    "@mediapipe/hands": "0.4.1675469240",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/cli": "^8.6.2",
+    "@napi-rs/canvas": "^1.2.0",
+    "@types/three": "^0.187.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.0",
+    "vite": "^8.3.8"
+  },
+  "versionCode": 3
+}

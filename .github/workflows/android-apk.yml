@@ -1,0 +1,117 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Buduj VisionPocket.apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Pobierz kod
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Android SDK (wbudowany w runner)
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls "$ANDROID_HOME" | head -20
+
+      - name: Zależności
+        run: npm ci
+
+      - name: Build web (dist)
+        run: npm run build
+
+      - name: Dodaj platformę Android
+        run: npx cap add android
+
+      - name: Patch manifestu (kamera, orientacja, fullscreen)
+        run: node scripts/patch-android.mjs
+
+      - name: Synchronizacja Capacitor
+        run: npx cap sync android
+
+      - name: Gradle — APK debug
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Nazwij plik + inwentarz builda
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/debug/app-debug.apk out/VisionPocket.apk
+          APK=out/VisionPocket.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -1)
+          {
+            echo "Automatyczny build z \`$GITHUB_REF_NAME\` (commit \`${GITHUB_SHA:0:7}\`)."
+            echo
+            echo "Pobierz **VisionPocket.apk** i zainstaluj na Androidzie (zezwól na instalację z nieznanych źródeł)."
+            echo
+            echo "### Metadane APK"
+            echo '```'
+            if [ -x "$BT/aapt2" ]; then
+              "$BT/aapt2" dump badging "$APK" 2>/dev/null | grep -E "package:|application-label:|uses-permission:" | head -20
+            else
+              echo "aapt2 niedostępny"
+            fi
+            echo '```'
+            echo "### Podpis (stały klucz — aktualizacje wchodzą na starą wersję)"
+            echo '```'
+            if [ -x "$BT/apksigner" ]; then
+              "$BT/apksigner" verify --print-certs "$APK" 2>/dev/null | head -4
+            else
+              echo "apksigner niedostępny"
+            fi
+            echo '```'
+            echo "### MediaPipe w APK (tryb offline)"
+            echo '```'
+            unzip -l "$APK" | grep -i mediapipe | awk '{print $1" B  "$4}' | head -12
+            echo '```'
+            echo "Rozmiar APK: $(du -h "$APK" | cut -f1) · pliki web: $(unzip -l "$APK" | grep -c 'assets/public/')"
+          } > out/release-notes.md
+          cat out/release-notes.md
+
+      - name: Artefakt (do pobrania z Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: VisionPocket-apk
+          path: out/VisionPocket.apk
+          if-no-files-found: error
+
+      - name: Wydanie na GitHub Releases (stały link)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: VisionPocket — najnowszy APK
+          body_path: out/release-notes.md
+          files: out/VisionPocket.apk
+          prerelease: true
+          fail_on_unmatched_files: true

@@ -1,0 +1,15 @@
+node_modules
+dist
+public/mediapipe
+.DS_Store
+*.log
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/.idea
+*.apk
+.vercel
+
+tools/smoke/shots
+tools/smoke/out.mjs
