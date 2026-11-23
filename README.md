@@ -8,6 +8,25 @@ Bez kontrolerów, bez gogli za 2500 zł, bez instalowania czegokolwiek na komput
 
 ---
 
+## Tak to wygląda
+
+Panele są renderowane jako tekstury 3D — poniżej zrzuty z prawdziwego kodu
+(generowane testem `npm run smoke`, bez upiększeń).
+
+| Dom | Kino |
+|---|---|
+| ![Dom](docs/screens/home.jpg) | ![Kino](docs/screens/cinema.jpg) |
+
+| Gra | Notatki |
+|---|---|
+| ![Gra](docs/screens/game.jpg) | ![Notatki](docs/screens/notes.jpg) |
+
+| Galeria | Ustawienia | Pomoc |
+|---|---|---|
+| ![Galeria](docs/screens/gallery.jpg) | ![Ustawienia](docs/screens/settings.jpg) | ![Pomoc](docs/screens/help.jpg) |
+
+---
+
 ## Co to potrafi
 
 | Funkcja | Status |
@@ -128,6 +147,15 @@ src/
 - [ ] **Nagrywanie/stream** — podgląd VR na drugim telefonie (WebRTC).
 
 ---
+
+## Test dymny
+
+```bash
+npm run smoke
+```
+
+Renderuje każdy ekran na canvasie (Skia), klika wszystkie obszary interaktywne, sprawdza
+raycast wskaźnika i zapisuje zrzuty do `tools/smoke/shots/`. Bez przeglądarki — działa w Node.
 
 ## Licencje i podziękowania
 
