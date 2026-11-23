@@ -25,8 +25,11 @@ public class StartWindow implements WindowContent {
 
     private static final String[] TILE_KINDS = {"cinema", "photos", "mirror", "notes", "clock", "game"};
     private static final String[] TILE_ICONS = {"🎬", "🖼", "▣", "📝", "🕒", "🎯"};
-    private static final float[] TILE_YAW_DEG = {0f, 60f, -60f, 120f, -120f, 180f};
-    private static final float RING_R = 2.75f;
+    // Quest-like launcher: dashboard above, one arc row of tiles below.
+    // ALL UI lives inside the visible FOV — nothing behind the user.
+    private static final float[] TILE_YAW_DEG = {-30f, -18f, -6f, 6f, 18f, 30f};
+    private static final float RING_R = 2.7f;
+    private static final float TILE_Y = -0.25f;
 
     private final Paint pTime = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pDate = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -40,47 +43,47 @@ public class StartWindow implements WindowContent {
         this.host = host;
         window = new VpWindows.Window("start", host.activity().getString(R.string.win_start));
 
-        // dashboard right in front of the user
-        chrome = new Panel(0, 0, 0, 0, 1.55f, 1.05f, 800f);
-        window.addPart(chrome, 0f, 0.10f, -2.15f);
+        // dashboard raised, in front of the user
+        chrome = new Panel(0, 0, 0, 0, 1.30f, 0.85f, 800f);
+        window.addPart(chrome, 0f, 0.45f, -2.2f);
         window.attachChrome(chrome);
         window.content = this;
         int s = VpWindows.STRIP_PX;
-        chrome.add("up_ok", 60, 360 + s, 590, 480 + s);
-        chrome.add("up_flip", 650, 360 + s, 1180, 480 + s);
-        chrome.add("do_recenter", 60, 520 + s, 590, 640 + s);
-        chrome.add("close", 650, 520 + s, 1180, 640 + s);
+        chrome.add("up_ok", 60, 280 + s, 500, 385 + s);
+        chrome.add("up_flip", 540, 280 + s, 980, 385 + s);
+        chrome.add("do_recenter", 60, 405 + s, 500, 510 + s);
+        chrome.add("close", 540, 405 + s, 980, 510 + s);
         chrome.click = b -> onClick(b.id);
 
-        // app tiles ringed around the head, every tile facing the user
+        // one arc row of app tiles below the dashboard, all facing the user
         for (int i = 0; i < 6; i++) {
             float a = (float) Math.toRadians(TILE_YAW_DEG[i]);
-            Panel tile = new Panel(0, 0, 0, a, 1.02f, 0.64f, 800f);
+            Panel tile = new Panel(0, 0, 0, a, 0.62f, 0.42f, 800f);
             tile.add(TILE_KINDS[i], 0, 0, tile.pw, tile.ph);
             final int idx = i;
             tile.hook = (c, p) -> drawTile(c, p, idx);
             float ox = (float) Math.sin(a) * RING_R;
             float oz = -(float) Math.cos(a) * RING_R;
-            window.addPartRing(tile, ox, -0.02f, oz, a);
+            window.addPartRing(tile, ox, TILE_Y, oz, a);
         }
 
         pTime.setColor(UiKit.TEXT);
-        pTime.setTextSize(120f);
+        pTime.setTextSize(84f);
         pTime.setFakeBoldText(true);
         pTime.setTextAlign(Paint.Align.LEFT);
         pDate.setColor(UiKit.TEXT_DIM);
-        pDate.setTextSize(42f);
+        pDate.setTextSize(32f);
         pDate.setTextAlign(Paint.Align.LEFT);
         pBattery.setColor(UiKit.TEXT_DIM);
-        pBattery.setTextSize(42f);
+        pBattery.setTextSize(32f);
         pBattery.setTextAlign(Paint.Align.RIGHT);
-        pIcon.setTextSize(88f);
+        pIcon.setTextSize(60f);
         pIcon.setTextAlign(Paint.Align.CENTER);
         pTileLabel.setColor(UiKit.TEXT);
-        pTileLabel.setTextSize(50f);
+        pTileLabel.setTextSize(40f);
         pTileLabel.setTextAlign(Paint.Align.CENTER);
         pTileSub.setColor(UiKit.TEXT_DIM);
-        pTileSub.setTextSize(30f);
+        pTileSub.setTextSize(24f);
         pTileSub.setTextAlign(Paint.Align.CENTER);
 
         // anchor AT the user: parts are positioned relative to the head,
@@ -100,12 +103,12 @@ public class StartWindow implements WindowContent {
         Calendar cal = Calendar.getInstance();
         String time = String.format(java.util.Locale.getDefault(), "%02d:%02d",
                 cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE));
-        c.drawText(time, 64f, 150f, pTime);
+        c.drawText(time, 56f, 135f, pTime);
         String date = String.format(java.util.Locale.getDefault(), "%tA, %1$te %1$tB", cal);
-        c.drawText(date, 68f, 215f, pDate);
-        c.drawText("🔋 " + host.activity().batteryPct() + "%", p.pw - 64f, 150f, pBattery);
+        c.drawText(date, 60f, 195f, pDate);
+        c.drawText("🔋 " + host.activity().batteryPct() + "%", p.pw - 56f, 135f, pBattery);
 
-        UiKit.section(c, host.activity().getString(R.string.start_sec_orient), 64f, 305f);
+        UiKit.section(c, host.activity().getString(R.string.start_sec_orient), 60f, 262f);
         for (Panel.Button b : p.buttons) {
             if (!"up_ok".equals(b.id) && !"up_flip".equals(b.id)
                     && !"do_recenter".equals(b.id) && !"close".equals(b.id)) continue;
@@ -122,9 +125,8 @@ public class StartWindow implements WindowContent {
         }
 
         // live telemetry
-        c.drawText(host.activity().getString(R.string.start_tip1), 68f, 745f, pTileSub);
-        UiKit.status(c, host.pipelineInfo(), 68f, 800f);
-        UiKit.status(c, host.headAngles(), 68f, 850f);
+        UiKit.status(c, host.pipelineInfo(), 60f, 580f);
+        UiKit.status(c, host.headAngles(), 60f, 630f);
     }
 
     private void drawTile(Canvas c, Panel p, int idx) {
@@ -155,9 +157,9 @@ public class StartWindow implements WindowContent {
         br.setStrokeWidth(4f);
         br.setColor(hover ? UiKit.BORDER_HOVER : UiKit.BORDER);
         c.drawRoundRect(r, 30, 30, br);
-        c.drawText(TILE_ICONS[idx], p.pw / 2f, 215f, pIcon);
-        c.drawText(labels[idx], p.pw / 2f, 345f, pTileLabel);
-        c.drawText(subs[idx], p.pw / 2f, 415f, pTileSub);
+        c.drawText(TILE_ICONS[idx], p.pw / 2f, p.ph * 0.44f, pIcon);
+        c.drawText(labels[idx], p.pw / 2f, p.ph * 0.74f, pTileLabel);
+        c.drawText(subs[idx], p.pw / 2f, p.ph * 0.92f, pTileSub);
     }
 
     @Override public void draw(Canvas c, Panel p, boolean focused) { drawBody(c, p, focused); }

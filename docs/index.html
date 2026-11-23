@@ -118,8 +118,8 @@
 <section id="pobierz" class="wrap">
   <div class="install">
     <div>
-      <a class="btn" href="VisionPocket-v3.2.apk?v=32" download>📲 &nbsp;Zainstaluj VisionPocket</a>
-      <div class="meta"><b>Aktualna wersja: v3.2</b> · versionCode 23 · <b>0,31 MB</b> · 23 listopada 2026 · <i>jeśli po instalacji aplikacja pokazuje inną wersję — odśwież stronę (Ctrl+Shift+R / tryb incognito)</i></div>
+      <a class="btn" href="VisionPocket-v3.3.apk?v=33" download>📲 &nbsp;Zainstaluj VisionPocket</a>
+      <div class="meta"><b>Aktualna wersja: v3.3</b> · versionCode 24 · <b>0,31 MB</b> · 23 listopada 2026 · <i>jeśli po instalacji aplikacja pokazuje inną wersję — odśwież stronę (Ctrl+Shift+R / tryb incognito)</i></div>
       <div class="note">⚠️ Przy instalacji telefon zapyta o „nieznane źródła” — zezwól (to build testowy podpisany kluczem debug).</div>
       <div style="margin-top:18px"><a class="btn ghost hide-desktop" href="#adb">⌨️ Instalacja przez ADB z komputera</a>
       <a class="btn ghost hide-mobile" href="https://github.com/rejson59/VisionPocket/releases">🗂 Wszystkie wydania</a></div>
@@ -141,14 +141,14 @@
   <h2>Telefon podłączony przez ADB?</h2>
   <div class="adb">
     <p><b style="color:var(--text)">Przeglądarka nie może sama użyć ADB</b> (bezpieczeństwo USB/Chrome) — ale z komputera, przy podłączonym telefonie, cała instalacja to jedna linijka w terminalu:</p>
-    <code class="block" id="cmd1">curl -L -o vp.apk "https://rejson59.github.io/VisionPocket/VisionPocket-v3.2.apk?v=32" &amp;&amp; adb install -r vp.apk</code>
+    <code class="block" id="cmd1">curl -L -o vp.apk "https://rejson59.github.io/VisionPocket/VisionPocket-v3.3.apk?v=33" &amp;&amp; adb install -r vp.apk</code>
     <button class="btn ghost copy" onclick="cp('cmd1')">📋 Kopiuj</button>
     <div class="hint">
       Wymaga: <b style="color:var(--text)">debugowanie USB</b> włączone na telefonie (Ustawienia → Opcje programisty → Debugowanie USB) i sprawdzonego <code>adb devices</code>.
       Flaga <code>-r</code> aktualizuje istniejącą instalację bez utraty ustawień i notatek.<br>
       Windows PowerShell: <code>curl.exe</code> zamiast <code>curl</code> (albo pobierz APK przyciskiem powyżej i przeciągnij plik na telefon).
     </div>
-    <div class="hint">Lokalnie z komputera, bez pobierania (jeśli masz repo): <code>adb install -r release/VisionPocket-v3.2.apk</code></div>
+    <div class="hint">Lokalnie z komputera, bez pobierania (jeśli masz repo): <code>adb install -r release/VisionPocket-v3.3.apk</code></div>
   </div>
 </section>
 
@@ -172,7 +172,8 @@
   <details>
     <summary>Co nowego w serii 1.9.x (pierwszy działający launch na telefonie)</summary>
     <ul>
-                        <li><b>3.2</b> — ŚLEDZENIE GŁOWY WEDŁUG GOOGLE CARDBOARD SDK: algorytm przeniesiony 1:1 z oficjalnego open-source'owego SDK Google (head_tracker.cc) — rotation vector + oficjalne tablice rotacji per-orientacja ekranu; KONIEC zamrożonej kalibracji — grawitacja referencjonowana w KAŻDEJ klatce, świat zawsze pionowo niezależnie jak leży telefon; auto-recenter na start</li>
+                              <li><b>3.3</b> — PRZEBUDOWA WYGLĄDU W OKULARACH: renderowanie BEZPOŚREDNIO na ekran (viewporty = fizyczne połowy panelu — poprawna geometria z definicji, koniec losowych kształtów i rotacji), maska 2 okrągłych pól widoku jako overlay, auto-korekta orientacji powierzchni ekranu, układ pulpitu jak w Quest (pulpit u góry + rząd 6 kafli w łuku pod nim — wszystko w polu widzenia, nic za plecami); telemetria pokazuje wymiary powierzchni (surf)</li>
+<li><b>3.2</b> — ŚLEDZENIE GŁOWY WEDŁUG GOOGLE CARDBOARD SDK: algorytm przeniesiony 1:1 z oficjalnego open-source'owego SDK Google (head_tracker.cc) — rotation vector + oficjalne tablice rotacji per-orientacja ekranu; KONIEC zamrożonej kalibracji — grawitacja referencjonowana w KAŻDEJ klatce, świat zawsze pionowo niezależnie jak leży telefon; auto-recenter na start</li>
 <li><b>3.1</b> — KAMERA PEŁNOEKRANOWO w obu kółkach (to co widzi kamera, wypełnia cały widok) + AUTO-ORIENTACJA: obrót obrazu kamery liczony automatycznie z sensora telefonu (zero ręcznych ustawień), telefon trzymany w lewo/prawo obsłużony przez system; okna jednostronne — koniec lustrzanych tekstów i czarnych plam</li>
 <li><b>3.0</b> — PRAWDZIWY ŚWIAT 360°: środowisko liczone per-piksel z kierunku patrzenia (podłoga z siatką, ściany pokoju, sufit, horyzont) widoczne W KAŻDĄ STRONĘ — koniec czarnej pustki; kafle aplikacji w PIERŚCIENIU dookoła głowy (co 60°, także za plecami); pulpit przed sobą; 3 światy: Pokój / Kosmos / Horyzont</li>
 <li><b>2.1</b> — FIX trzęsienia: wyścigi wątków (sensor vs render) wyeliminowane przez pool snapshotów + wygładzenie o STAŁEJ STAŁEJ CZASOWEJ (τ=55 ms, identyczne zachowanie przy 60 i 500 Hz) + EMA na akcelerometrze; NOWY INTERFEJS: UiKit + redesign pulpitu (duży zegar, kafle z opisami, telemetria)</li>

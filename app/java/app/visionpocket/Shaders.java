@@ -184,6 +184,20 @@ public final class Shaders {
             "  gl_FragColor = vec4(scene * m, 1.0);\n" +
             "}\n";
 
+    /** Cardboard overlay: black outside the two rounded eye rects (direct path). */
+    public static final String FS_MASK =
+            "precision mediump float;\n" +
+            "uniform float uHalf;\n" +
+            "varying vec2 vPos;\n" +
+            "void main(){\n" +
+            "  vec2 b = vec2(0.985, 0.985);\n" +
+            "  float cr = 0.30;\n" +
+            "  vec2 cq = abs(vPos) - b + cr;\n" +
+            "  float d = length(max(cq, vec2(0.0))) + min(max(cq.x, cq.y), 0.0) - cr;\n" +
+            "  float m = 1.0 - smoothstep(-0.02, 0.008, d);\n" +
+            "  gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0 - m);\n" +
+            "}\n";
+
     public static final String VS_COLOR =
             "uniform mat4 uMVP;\n" +
             "attribute vec4 aPos;\n" +
