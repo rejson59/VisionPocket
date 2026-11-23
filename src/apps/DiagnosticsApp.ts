@@ -47,7 +47,7 @@ export class DiagnosticsApp implements VrApp {
   private buildReport(): string {
     const d = this.host.diagnostics();
     return [
-      `VisionPocket v0.2.0 — raport`,
+      `VisionPocket v${__APP_VERSION__} — raport`,
       `tryb: ${d.mode}`,
       `fps: ${d.fps.toFixed(0)} (render ${d.renderMs.toFixed(1)} ms)`,
       `skala renderu: ${(d.renderScale * 100).toFixed(0)}%  pixelRatio: ${d.pixelRatio}`,
@@ -73,7 +73,7 @@ export class DiagnosticsApp implements VrApp {
     this.report = this.buildReport();
 
     text(ctx, 'Diagnostyka', 40, 72, { size: 36, weight: 700 });
-    text(ctx, 'Realne liczby z tego telefonu', 40, 104, { size: 19, color: C.muted });
+    text(ctx, `Realne liczby z tego telefonu · v${__APP_VERSION__}`, 40, 104, { size: 19, color: C.muted });
 
     button(ctx, W - 230, 46, 190, 60, 'Wstecz', {
       hover: panel.hoverId === 'diag:back',

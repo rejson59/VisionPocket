@@ -167,6 +167,10 @@ filesInput?.addEventListener('change', async () => {
   filesInput.value = '';
 });
 
+// --- wersja w stopce (jedno źródło prawdy: package.json)
+const verEl = document.querySelector('.foot .ver');
+if (verEl) verEl.textContent = `v${__APP_VERSION__} · wydajność`;
+
 // --- informacja o urządzeniu
 if (deviceLine) {
   const hasOrientation = typeof DeviceOrientationEvent !== 'undefined';

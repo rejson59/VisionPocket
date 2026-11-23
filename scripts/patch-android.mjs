@@ -108,8 +108,9 @@ if (existsSync(KEYSTORE_B64) && existsSync(gradlePathForSigning)) {
 
 // --- wersja aplikacji (żeby było widać, że to nowy build) ---
 const gradlePath = 'android/app/build.gradle';
-const VERSION_NAME = '0.2.0';
-const VERSION_CODE = '2';
+const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+const VERSION_NAME = pkg.version;
+const VERSION_CODE = String(pkg.versionCode ?? 3);
 if (existsSync(gradlePath)) {
   let gradle = readFileSync(gradlePath, 'utf8');
   if (!/versionCode\s+\d+/.test(gradle)) {
