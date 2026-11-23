@@ -59,7 +59,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     // --- programs ---
     private int pPanel, pCam, pDist, pColor, pEnvDome;
     private int uPanelMVP, aPanelPos, aPanelUV, uPanelTex, uPanelAlpha, uPanelMode;
-    private int uCamMVP, aCamPos, aCamUV, uCamTex, uCamAngle, uCamZoom, uCamOverscan, uCamMode, uCamSide, uCamBright;
+    private int uCamMVP, aCamPos, aCamUV, uCamTex, uCamAngle, uCamZoom, uCamOverscan, uCamMode, uCamSide, uCamBright, uCamFit, uCamMirror;
     private int aDistPos, uDistScene, uDistEyeCenter, uDistHalf, uDistAspect, uDistK1, uDistK2;
     private int uColorMVP, aColorPos, uColorColor;
     private int uDomeRight, uDomeUp, uDomeFwd, uDomeTanX, uDomeTanY, uDomeMode, uDomeTime;
@@ -263,6 +263,8 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         uCamMode = GLES20.glGetUniformLocation(pCam, "uMode");
         uCamSide = GLES20.glGetUniformLocation(pCam, "uSide");
         uCamBright = GLES20.glGetUniformLocation(pCam, "uBright");
+        uCamFit = GLES20.glGetUniformLocation(pCam, "uFit");
+        uCamMirror = GLES20.glGetUniformLocation(pCam, "uMirror");
 
         pEnvDome = GlUtil.createProgram(Shaders.VS_DOME, Shaders.FS_DOME);
         uDomeRight = GLES20.glGetUniformLocation(pEnvDome, "uRight");
@@ -464,9 +466,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
                 boolean passthroughLive = envMode == 0 && settings.passthrough()
                         && cameraAllowed && camFrameEver;
                 if (passthroughLive) {
-                    drawCamBright(camTex, ptxCx, ptxCy, ptxCz, ptxYaw, ptxW, ptxH,
-                            settings.rotDeg(), settings.zoom(), OVERSCAN, pv,
-                            settings.brightness());
+                    drawCamFullscreen();
                 } else {
                     drawEnvDome(eyeView, envMode);
                 }
@@ -1029,6 +1029,56 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         GLES20.glEnableVertexAttribArray(aCamUV);
         GLES20.glVertexAttribPointer(aCamUV, 2, GLES20.GL_FLOAT, false, 8, Panel.quadUv());
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        GLES20.glEnable(GLES20.GL_BLEND);
+    }
+
+    /**
+     * v3.1 passthrough: the camera fills BOTH eye viewports completely
+     * (screen-aligned quad with identity view at z=-1). Rotation is computed
+     * AUTOMATICALLY from the camera sensor orientation + current display
+     * rotation (no manual setting), aspect-fill without distortion, front
+     * camera mirrored like a real mirror.
+     */
+    private void drawCamFullscreen() {
+        int displayRot = 0;
+        try {
+            android.view.Display d = activity.getWindowManager().getDefaultDisplay();
+            displayRot = d.getRotation() * 90;
+        } catch (Exception ignored) {}
+        int rot = ((camera.sensorOrientation - displayRot) % 360 + 360) % 360;
+
+        float camAspect = (float) camera.streamWidth / (float) Math.max(1, camera.streamHeight);
+        boolean rot90 = (rot == 90 || rot == 270);
+        float effA = rot90 ? 1f / Math.max(0.001f, camAspect) : camAspect;
+        float fitX = effA > eyeAspect ? effA / eyeAspect : 1f;
+        float fitY = effA > eyeAspect ? 1f : eyeAspect / Math.max(0.001f, effA);
+
+        Matrix.setIdentityM(tmpM2, 0);
+        Matrix.translateM(tmpM2, 0, 0f, 0f, -1f);
+        Matrix.scaleM(tmpM2, 0, 1f / proj[0], 1f / proj[5], 1f);
+        Matrix.multiplyMM(tmpM3, 0, proj, 0, tmpM2, 0);   // view = identity
+
+        GLES20.glDisable(GLES20.GL_BLEND);
+        GLES20.glDepthMask(false);
+        GLES20.glUseProgram(pCam);
+        GLES20.glUniformMatrix4fv(uCamMVP, 1, false, tmpM3, 0);
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, camTex);
+        GLES20.glUniform1i(uCamTex, 0);
+        GLES20.glUniform1f(uCamAngle, (float) Math.toRadians(camera.front ? rot : -rot));
+        GLES20.glUniform1f(uCamZoom, settings.zoom());
+        GLES20.glUniform1f(uCamOverscan, 1f);
+        GLES20.glUniform2f(uCamFit, fitX, fitY);
+        GLES20.glUniform1f(uCamMirror, camera.front ? 1f : 0f);
+        GLES20.glUniform1f(uCamMode, 0f);
+        GLES20.glUniform1f(uCamSide, 0f);
+        GLES20.glUniform1f(uCamBright, settings.brightness());
+        GLES20.glEnableVertexAttribArray(aCamPos);
+        GLES20.glVertexAttribPointer(aCamPos, 3, GLES20.GL_FLOAT, false, 12, Panel.quadPos());
+        GLES20.glEnableVertexAttribArray(aCamUV);
+        GLES20.glVertexAttribPointer(aCamUV, 2, GLES20.GL_FLOAT, false, 8, Panel.quadUv());
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        GLES20.glDepthMask(true);
         GLES20.glEnable(GLES20.GL_BLEND);
     }
 

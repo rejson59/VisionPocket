@@ -30,7 +30,10 @@ public final class Shaders {
             "uniform float uMode;\n" +
             "varying vec2 vUV;\n" +
             MODE_GLSL +
-            "void main(){ vec4 c = texture2D(uTex, applyMode(vUV, uMode)); gl_FragColor = vec4(c.rgb, c.a * uAlpha); }\n";
+            "void main(){\n" +
+            "  if (!gl_FrontFacing) discard;\n" +
+            "  vec4 c = texture2D(uTex, applyMode(vUV, uMode)); gl_FragColor = vec4(c.rgb, c.a * uAlpha);\n" +
+            "}\n";
 
     public static final String FS_CAM =
             "#extension GL_OES_EGL_image_external : require\n" +
@@ -42,14 +45,18 @@ public final class Shaders {
             "uniform float uMode;\n" +
             "uniform float uSide;\n" +
             "uniform float uBright;\n" +
+            "uniform vec2 uFit;\n" +
+            "uniform float uMirror;\n" +
             "varying vec2 vUV;\n" +
             MODE_GLSL +
             "void main(){\n" +
+            "  if (!gl_FrontFacing) discard;\n" +
             "  vec2 c = vUV - vec2(0.5);\n" +
+            "  if (uMirror > 0.5) { c.x = -c.x; }\n" +
             "  float cs = cos(uAngle);\n" +
             "  float sn = sin(uAngle);\n" +
             "  c = vec2(c.x*cs - c.y*sn, c.x*sn + c.y*cs);\n" +
-            "  c = c / (uZoom * uOverscan);\n" +
+            "  c = c / (uZoom * uOverscan * uFit);\n" +
             "  vec2 suv = vec2(0.5) + c;\n" +
             "  if (abs(uSide) > 0.5) { suv.x = (suv.x + (uSide < 0.0 ? 0.0 : 1.0)) * 0.5; }\n" +
             "  vec4 col = texture2D(uCam, applyMode(suv, uMode));\n" +
