@@ -77,6 +77,12 @@ To nie jest „Quest 3 za 100 zł” — to **inna klasa sprzętu, ale ta sama k
 
 ---
 
+### Aktualizacje
+
+APK jest podpisywany **stałym kluczem** (`scripts/android-signing.keystore.b64`), więc nowa
+wersja instaluje się prosto na starą — bez odinstalowywania. Zmiana `versionName`/`versionCode`
+odbywa się w `scripts/patch-android.mjs`.
+
 ## Szybki start
 
 ### 1. W przeglądarce (najszybszy test, bez instalacji)

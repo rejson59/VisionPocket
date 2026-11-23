@@ -9,6 +9,7 @@ if (!existsSync(manifestPath)) {
 }
 
 let xml = readFileSync(manifestPath, 'utf8');
+const gradlePathForSigning = 'android/app/build.gradle';
 
 const PERMISSIONS = [
   'android.permission.CAMERA',
@@ -68,6 +69,42 @@ if (!xml.includes('android:windowLayoutInDisplayCutoutMode')) {
 }
 
 writeFileSync(manifestPath, xml);
+
+// --- stabilny klucz podpisu: aktualizacje instalują się NA starą wersję ---
+// Bez tego każdy build CI ma inny debug-keystore i Android odmawia instalacji.
+const KEYSTORE_B64 = 'scripts/android-signing.keystore.b64';
+const KEYSTORE_STORE_PASS = 'visionpocket';
+if (existsSync(KEYSTORE_B64) && existsSync(gradlePathForSigning)) {
+  const p12 = Buffer.from(readFileSync(KEYSTORE_B64, 'utf8').replace(/\s+/g, ''), 'base64');
+  writeFileSync('android/app/visionpocket.keystore', p12);
+  let gradle = readFileSync(gradlePathForSigning, 'utf8');
+  if (!gradle.includes('visionpocket.keystore')) {
+    gradle = gradle.replace(/android\s*\{/, (m) => `${m}
+    signingConfigs {
+        debug {
+            storeFile file('visionpocket.keystore')
+            storeType 'PKCS12'
+            storePassword '${KEYSTORE_STORE_PASS}'
+            keyAlias 'visionpocket'
+            keyPassword '${KEYSTORE_STORE_PASS}'
+            enableV1Signing true
+            enableV2Signing true
+        }
+        release {
+            storeFile file('visionpocket.keystore')
+            storeType 'PKCS12'
+            storePassword '${KEYSTORE_STORE_PASS}'
+            keyAlias 'visionpocket'
+            keyPassword '${KEYSTORE_STORE_PASS}'
+            enableV1Signing true
+            enableV2Signing true
+        }
+    }
+`);
+    writeFileSync(gradlePathForSigning, gradle);
+    console.log('[patch-android] stabilny klucz podpisu ustawiony');
+  }
+}
 
 // --- wersja aplikacji (żeby było widać, że to nowy build) ---
 const gradlePath = 'android/app/build.gradle';
