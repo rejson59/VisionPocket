@@ -165,4 +165,6 @@
     <string name="env_scene_game">🎯 Gra</string>
     <string name="diag_share">📤  Wyślij raport</string>
     <string name="share_title">Wyślij raport VisionPocket</string>
+    <string name="start_up_ok">✓  Obraz prosto</string>
+    <string name="start_up_flip">↻  Obróć 180°</string>
 </resources>

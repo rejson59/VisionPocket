@@ -4,6 +4,7 @@ out/
 gen/
 *.apk
 !release/*.apk
+!docs/*.apk
 *.idsig
 local.properties
 

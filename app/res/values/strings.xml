@@ -168,4 +168,6 @@
     <string name="env_scene_game">🎯 Game</string>
     <string name="diag_share">📤  Share report</string>
     <string name="share_title">Send VisionPocket report</string>
+    <string name="start_up_ok">✓  Looks straight</string>
+    <string name="start_up_flip">↻  Rotate 180°</string>
 </resources>

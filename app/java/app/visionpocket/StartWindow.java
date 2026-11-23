@@ -30,6 +30,9 @@ public class StartWindow implements WindowContent {
     private final Paint pIcon = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pLabel = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pText = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pAccent = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pAccentHover = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pPrimary = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     public StartWindow(VpWindows wm, VpWindows.WmHost host) {
         this.wm = wm;
@@ -45,11 +48,13 @@ public class StartWindow implements WindowContent {
         for (int i = 0; i < 6; i++) {
             int col = i % 3, row = i / 3;
             int x0 = 60 + col * 370;
-            int y0 = 290 + row * 190;
+            int y0 = 240 + row * 180;
             chrome.add(ids[i], x0, y0 + s, x0 + 340, y0 + 160 + s);
         }
-        chrome.add("do_recenter", 60, 700 + s, 560, 840 + s);
-        chrome.add("close", 640, 700 + s, 1140, 840 + s);
+        chrome.add("up_ok", 60, 600 + s, 560, 730 + s);
+        chrome.add("up_flip", 620, 600 + s, 1140, 730 + s);
+        chrome.add("do_recenter", 60, 750 + s, 560, 860 + s);
+        chrome.add("close", 640, 750 + s, 1140, 860 + s);
         chrome.click = b -> onClick(b.id);
 
         pBg.setColor(0xFF101113);
@@ -78,6 +83,11 @@ public class StartWindow implements WindowContent {
         pText.setColor(0xFF8A909C);
         pText.setTextSize(38f);
         pText.setTextAlign(Paint.Align.LEFT);
+        pAccent.setColor(0xFF8FA3C8);
+        pAccentHover.setColor(0xFFB4C2DD);
+        pPrimary.setColor(0xFF101216);
+        pPrimary.setTextSize(46f);
+        pPrimary.setTextAlign(Paint.Align.CENTER);
 
         wm.placeNew(window);
     }
@@ -116,26 +126,43 @@ public class StartWindow implements WindowContent {
         }
 
         for (Panel.Button b : p.buttons) {
-            if ("do_recenter".equals(b.id) || "close".equals(b.id)) {
+            if ("up_ok".equals(b.id) || "up_flip".equals(b.id)
+                    || "do_recenter".equals(b.id) || "close".equals(b.id)) {
                 RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
-                c.drawRoundRect(r, 26, 26, b.hover ? pBtnHover : pBtn);
+                boolean primary = "up_ok".equals(b.id);
+                if (primary) {
+                    c.drawRoundRect(r, 26, 26, b.hover ? pAccentHover : pAccent);
+                } else {
+                    c.drawRoundRect(r, 26, 26, b.hover ? pBtnHover : pBtn);
+                }
                 pBorder.setColor(b.hover ? 0xFF8FA3C8 : 0xFF2E3138);
                 c.drawRoundRect(r, 26, 26, pBorder);
-                String label = "close".equals(b.id)
-                        ? host.activity().getString(R.string.common_close)
-                        : host.activity().getString(R.string.common_recenter);
-                HomeSceneUtil.drawCentered(c, label, r, pLabel);
+                String label;
+                switch (b.id) {
+                    case "up_ok": label = host.activity().getString(R.string.start_up_ok); break;
+                    case "up_flip": label = host.activity().getString(R.string.start_up_flip); break;
+                    case "close": label = host.activity().getString(R.string.common_close); break;
+                    default: label = host.activity().getString(R.string.common_recenter);
+                }
+                HomeSceneUtil.drawCentered(c, label, r, primary ? pPrimary : pLabel);
             }
         }
-        c.drawText(host.activity().getString(R.string.start_tip1), 62f, 930f, pText);
+        c.drawText(host.activity().getString(R.string.start_tip1), 62f, 920f, pText);
     }
 
     @Override public void draw(Canvas c, Panel p, boolean focused) { drawBody(c, p, focused); }
 
     @Override public void onClick(String id) {
-        if ("do_recenter".equals(id)) host.recenterView();
+        if ("up_ok".equals(id)) {
+            host.activity().playChime();
+        } else if ("up_flip".equals(id)) {
+            host.settings().setViewRot(host.settings().viewRot() + 2);
+            host.recenterView();
+            host.activity().playChime();
+        } else if ("do_recenter".equals(id)) host.recenterView();
         else if ("close".equals(id)) wm.close(window);
         else host.openApp(id);
+        chrome.dirty = true;
     }
 
     @Override public void onBodyClick(Panel part) {}
