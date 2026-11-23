@@ -64,11 +64,32 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Nazwij plik
+      - name: Nazwij plik + inwentarz builda
         run: |
           mkdir -p out
           cp android/app/build/outputs/apk/debug/app-debug.apk out/VisionPocket.apk
-          ls -lh out
+          APK=out/VisionPocket.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -1)
+          {
+            echo "Automatyczny build z \`$GITHUB_REF_NAME\` (commit \`${GITHUB_SHA:0:7}\`)."
+            echo
+            echo "Pobierz **VisionPocket.apk** i zainstaluj na Androidzie (zezwól na instalację z nieznanych źródeł)."
+            echo
+            echo "### Metadane APK"
+            echo '```'
+            if [ -x "$BT/aapt2" ]; then
+              "$BT/aapt2" dump badging "$APK" 2>/dev/null | grep -E "package:|application-label:|uses-permission:" | head -20
+            else
+              echo "aapt2 niedostępny"
+            fi
+            echo '```'
+            echo "### MediaPipe w APK (tryb offline)"
+            echo '```'
+            unzip -l "$APK" | grep -i mediapipe | awk '{print $1" B  "$4}' | head -12
+            echo '```'
+            echo "Rozmiar APK: $(du -h "$APK" | cut -f1) · pliki web: $(unzip -l "$APK" | grep -c 'assets/public/')"
+          } > out/release-notes.md
+          cat out/release-notes.md
 
       - name: Artefakt (do pobrania z Actions)
         uses: actions/upload-artifact@v4
@@ -82,10 +103,7 @@ jobs:
         with:
           tag_name: apk-latest
           name: VisionPocket — najnowszy APK
-          body: |
-            Automatyczny build z gałęzi `${{ github.ref_name }}` (commit `${{ github.sha }}`).
-
-            Pobierz `VisionPocket.apk` i zainstaluj na telefonie (trzeba zezwolić na instalację z nieznanych źródeł).
+          body_path: out/release-notes.md
           files: out/VisionPocket.apk
           prerelease: true
           fail_on_unmatched_files: true
