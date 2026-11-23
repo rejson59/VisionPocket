@@ -115,8 +115,8 @@
 <section id="pobierz" class="wrap">
   <div class="install">
     <div>
-      <a class="btn" href="VisionPocket-v2.0.apk" download>📲 &nbsp;Zainstaluj VisionPocket</a>
-      <div class="meta"><b>v2.0</b> · versionCode 19 · <b>0,31 MB</b> · 22 listopada 2026</div>
+      <a class="btn" href="VisionPocket-v2.1.apk" download>📲 &nbsp;Zainstaluj VisionPocket</a>
+      <div class="meta"><b>v2.1</b> · versionCode 20 · <b>0,31 MB</b> · 22 listopada 2026</div>
       <div class="note">⚠️ Przy instalacji telefon zapyta o „nieznane źródła” — zezwól (to build testowy podpisany kluczem debug).</div>
       <div style="margin-top:18px"><a class="btn ghost hide-desktop" href="#adb">⌨️ Instalacja przez ADB z komputera</a>
       <a class="btn ghost hide-mobile" href="https://github.com/rejson59/VisionPocket/releases">🗂 Wszystkie wydania</a></div>
@@ -138,14 +138,14 @@
   <h2>Telefon podłączony przez ADB?</h2>
   <div class="adb">
     <p><b style="color:var(--text)">Przeglądarka nie może sama użyć ADB</b> (bezpieczeństwo USB/Chrome) — ale z komputera, przy podłączonym telefonie, cała instalacja to jedna linijka w terminalu:</p>
-    <code class="block" id="cmd1">curl -L -o vp.apk https://rejson59.github.io/VisionPocket/VisionPocket-v2.0.apk &amp;&amp; adb install -r vp.apk</code>
+    <code class="block" id="cmd1">curl -L -o vp.apk https://rejson59.github.io/VisionPocket/VisionPocket-v2.1.apk &amp;&amp; adb install -r vp.apk</code>
     <button class="btn ghost copy" onclick="cp('cmd1')">📋 Kopiuj</button>
     <div class="hint">
       Wymaga: <b style="color:var(--text)">debugowanie USB</b> włączone na telefonie (Ustawienia → Opcje programisty → Debugowanie USB) i sprawdzonego <code>adb devices</code>.
       Flaga <code>-r</code> aktualizuje istniejącą instalację bez utraty ustawień i notatek.<br>
       Windows PowerShell: <code>curl.exe</code> zamiast <code>curl</code> (albo pobierz APK przyciskiem powyżej i przeciągnij plik na telefon).
     </div>
-    <div class="hint">Lokalnie z komputera, bez pobierania (jeśli masz repo): <code>adb install -r release/VisionPocket-v2.0.apk</code></div>
+    <div class="hint">Lokalnie z komputera, bez pobierania (jeśli masz repo): <code>adb install -r release/VisionPocket-v2.1.apk</code></div>
   </div>
 </section>
 
@@ -169,7 +169,8 @@
   <details>
     <summary>Co nowego w serii 1.9.x (pierwszy działający launch na telefonie)</summary>
     <ul>
-      <li><b>2.0</b> — PRZEPISANE ŚLEDZENIE GŁOWY od zera: kwaterniony, samoweryfikujący recenter (algorytm sam testuje znak obrotu), kalibracja z akcelerometru + <b>żywy odczyt YAW/PITCH/ROLL na pulpicie</b> — jeśli cokolwiek jest krzywe, odczyt pokazuje o ile i w której osi</li>
+      <li><b>2.1</b> — FIX trzęsienia: wyścigi wątków (sensor vs render) wyeliminowane przez pool snapshotów + wygładzenie o STAŁEJ STAŁEJ CZASOWEJ (τ=55 ms, identyczne zachowanie przy 60 i 500 Hz) + EMA na akcelerometrze; NOWY INTERFEJS: UiKit + redesign pulpitu (duży zegar, kafle z opisami, telemetria)</li>
+      <li><b>2.0</b> — śledzenie głowy od zera: kwaterniony, samoweryfikujący recenter, żywy odczyt YAW/PITCH/ROLL</li>
       <li><b>1.9.7</b> — naprawiony wyścig kalibracji + linia statusu</li>
       <li><b>1.9.6</b> — wygląd w stylu cardboard: 2 zaokrąglone viewporty z czarnym rozdziałem; „Obraz prosto? / Obróć 180°” w oknie startowym; poprawka 404 na przycisku instalacji</li>
       <li><b>1.9.5</b> — kalibracja orientacji głowy z akcelerometru (fizyka zamiast konwencji osi) + 🔄 ×N jako ręczna rola</li>
