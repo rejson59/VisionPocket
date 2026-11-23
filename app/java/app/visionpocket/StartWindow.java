@@ -7,12 +7,12 @@ import android.graphics.RectF;
 import java.util.Calendar;
 
 /**
- * Home dashboard v2 — the "better interface":
- *  - greeting header with big clock + battery
- *  - 2x3 app tiles (icon + label + one-line description)
- *  - orientation confirm row (✓ straight / ↻ 180°)
- *  - actions row, live telemetry footer
- * All chrome drawn through UiKit for a consistent look.
+ * Home hub v3 — built for the 360-degree world:
+ *  - the window anchor sits AT the user, so its parts form a ring around them
+ *  - dashboard panel right in front (clock, battery, orientation, actions,
+ *    live telemetry)
+ *  - six app tiles placed around the head at 60-degree steps (front, both
+ *    sides, behind) — look anywhere, there is an app there
  */
 public class StartWindow implements WindowContent {
 
@@ -25,6 +25,8 @@ public class StartWindow implements WindowContent {
 
     private static final String[] TILE_KINDS = {"cinema", "photos", "mirror", "notes", "clock", "game"};
     private static final String[] TILE_ICONS = {"🎬", "🖼", "▣", "📝", "🕒", "🎯"};
+    private static final float[] TILE_YAW_DEG = {0f, 60f, -60f, 120f, -120f, 180f};
+    private static final float RING_R = 2.75f;
 
     private final Paint pTime = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pDate = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -32,51 +34,61 @@ public class StartWindow implements WindowContent {
     private final Paint pIcon = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pTileLabel = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pTileSub = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint pStatus = UiKit.monoPaint();
 
     public StartWindow(VpWindows wm, VpWindows.WmHost host) {
         this.wm = wm;
         this.host = host;
         window = new VpWindows.Window("start", host.activity().getString(R.string.win_start));
-        chrome = new Panel(0, 0, 0, 0, 1.6f, 1.5f, 800f);
-        window.addPart(chrome, 0, 0, 0);
+
+        // dashboard right in front of the user
+        chrome = new Panel(0, 0, 0, 0, 1.55f, 1.05f, 800f);
+        window.addPart(chrome, 0f, 0.10f, -2.15f);
         window.attachChrome(chrome);
         window.content = this;
-
         int s = VpWindows.STRIP_PX;
-        String[] ids = {"cinema", "photos", "mirror", "notes", "clock", "game"};
-        for (int i = 0; i < 6; i++) {
-            int col = i % 3, row = i / 3;
-            int x0 = 60 + col * 388;
-            int y0 = 250 + row * 190;
-            chrome.add(ids[i], x0, y0 + s, x0 + 368, y0 + 170 + s);
-        }
-        chrome.add("up_ok", 60, 660 + s, 620, 790 + s);
-        chrome.add("up_flip", 660, 660 + s, 1220, 790 + s);
-        chrome.add("do_recenter", 60, 810 + s, 620, 920 + s);
-        chrome.add("close", 660, 810 + s, 1220, 920 + s);
+        chrome.add("up_ok", 60, 360 + s, 590, 480 + s);
+        chrome.add("up_flip", 650, 360 + s, 1180, 480 + s);
+        chrome.add("do_recenter", 60, 520 + s, 590, 640 + s);
+        chrome.add("close", 650, 520 + s, 1180, 640 + s);
         chrome.click = b -> onClick(b.id);
 
+        // app tiles ringed around the head, every tile facing the user
+        for (int i = 0; i < 6; i++) {
+            float a = (float) Math.toRadians(TILE_YAW_DEG[i]);
+            Panel tile = new Panel(0, 0, 0, a, 1.02f, 0.64f, 800f);
+            tile.add(TILE_KINDS[i], 0, 0, tile.pw, tile.ph);
+            final int idx = i;
+            tile.hook = (c, p) -> drawTile(c, p, idx);
+            float ox = (float) Math.sin(a) * RING_R;
+            float oz = -(float) Math.cos(a) * RING_R;
+            window.addPartRing(tile, ox, -0.02f, oz, a);
+        }
+
         pTime.setColor(UiKit.TEXT);
-        pTime.setTextSize(110f);
+        pTime.setTextSize(120f);
         pTime.setFakeBoldText(true);
         pTime.setTextAlign(Paint.Align.LEFT);
         pDate.setColor(UiKit.TEXT_DIM);
-        pDate.setTextSize(40f);
+        pDate.setTextSize(42f);
         pDate.setTextAlign(Paint.Align.LEFT);
         pBattery.setColor(UiKit.TEXT_DIM);
-        pBattery.setTextSize(40f);
+        pBattery.setTextSize(42f);
         pBattery.setTextAlign(Paint.Align.RIGHT);
-        pIcon.setTextSize(64f);
+        pIcon.setTextSize(88f);
         pIcon.setTextAlign(Paint.Align.CENTER);
         pTileLabel.setColor(UiKit.TEXT);
-        pTileLabel.setTextSize(42f);
+        pTileLabel.setTextSize(50f);
         pTileLabel.setTextAlign(Paint.Align.CENTER);
         pTileSub.setColor(UiKit.TEXT_DIM);
-        pTileSub.setTextSize(28f);
+        pTileSub.setTextSize(30f);
         pTileSub.setTextAlign(Paint.Align.CENTER);
 
-        wm.placeNew(window);
+        // anchor AT the user: parts are positioned relative to the head,
+        // recenter rotates the whole ring around the user
+        window.ax = 0f; window.ay = 0f; window.az = 0f;
+        window.ayaw = host.headYaw();
+        window.layout();
+        wm.add(window);
     }
 
     private void drawBody(Canvas c, Panel p, boolean focused) {
@@ -85,16 +97,37 @@ public class StartWindow implements WindowContent {
         bg.setColor(UiKit.BG);
         c.drawRoundRect(0, 0, p.pw, p.ph - s, 0, 0, bg);
 
-        // header
         Calendar cal = Calendar.getInstance();
         String time = String.format(java.util.Locale.getDefault(), "%02d:%02d",
                 cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE));
-        c.drawText(time, 60f, 160f, pTime);
+        c.drawText(time, 64f, 150f, pTime);
         String date = String.format(java.util.Locale.getDefault(), "%tA, %1$te %1$tB", cal);
-        c.drawText(date, 64f, 222f, pDate);
-        c.drawText("🔋 " + host.activity().batteryPct() + "%", p.pw - 64f, 160f, pBattery);
+        c.drawText(date, 68f, 215f, pDate);
+        c.drawText("🔋 " + host.activity().batteryPct() + "%", p.pw - 64f, 150f, pBattery);
 
-        // tiles
+        UiKit.section(c, host.activity().getString(R.string.start_sec_orient), 64f, 305f);
+        for (Panel.Button b : p.buttons) {
+            if (!"up_ok".equals(b.id) && !"up_flip".equals(b.id)
+                    && !"do_recenter".equals(b.id) && !"close".equals(b.id)) continue;
+            RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
+            boolean primary = "up_ok".equals(b.id);
+            String label;
+            switch (b.id) {
+                case "up_ok": label = host.activity().getString(R.string.start_up_ok); break;
+                case "up_flip": label = host.activity().getString(R.string.start_up_flip); break;
+                case "close": label = host.activity().getString(R.string.common_close); break;
+                default: label = host.activity().getString(R.string.common_recenter);
+            }
+            UiKit.button(c, r, label, b.hover, primary);
+        }
+
+        // live telemetry
+        c.drawText(host.activity().getString(R.string.start_tip1), 68f, 745f, pTileSub);
+        UiKit.status(c, host.pipelineInfo(), 68f, 800f);
+        UiKit.status(c, host.headAngles(), 68f, 850f);
+    }
+
+    private void drawTile(Canvas c, Panel p, int idx) {
         String[] labels = {
                 host.activity().getString(R.string.win_cinema),
                 host.activity().getString(R.string.win_photos),
@@ -111,45 +144,20 @@ public class StartWindow implements WindowContent {
                 host.activity().getString(R.string.start_sub_clock),
                 host.activity().getString(R.string.start_sub_game)
         };
-        for (int i = 0; i < 6; i++) {
-            Panel.Button b = null;
-            for (Panel.Button bb : p.buttons) if (TILE_KINDS[i].equals(bb.id)) b = bb;
-            if (b == null) continue;
-            RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
-            Paint f = new Paint(Paint.ANTI_ALIAS_FLAG);
-            f.setColor(b.hover ? UiKit.CARD_HOVER : UiKit.CARD);
-            c.drawRoundRect(r, 26, 26, f);
-            Paint br = new Paint(Paint.ANTI_ALIAS_FLAG);
-            br.setStyle(Paint.Style.STROKE);
-            br.setStrokeWidth(3f);
-            br.setColor(b.hover ? UiKit.BORDER_HOVER : UiKit.BORDER);
-            c.drawRoundRect(r, 26, 26, br);
-            c.drawText(TILE_ICONS[i], r.centerX(), r.centerY() - 22f
-                    - (pIcon.ascent() + pIcon.descent()) / 2f, pIcon);
-            c.drawText(labels[i], r.centerX(), r.centerY() + 34f, pTileLabel);
-            c.drawText(subs[i], r.centerX(), r.centerY() + 78f, pTileSub);
-        }
-
-        // orientation confirm + actions
-        for (Panel.Button b : p.buttons) {
-            if (!"up_ok".equals(b.id) && !"up_flip".equals(b.id)
-                    && !"do_recenter".equals(b.id) && !"close".equals(b.id)) continue;
-            RectF r = new RectF(b.rect.left, b.rect.top - s, b.rect.right, b.rect.bottom - s);
-            boolean primary = "up_ok".equals(b.id);
-            String label;
-            switch (b.id) {
-                case "up_ok": label = host.activity().getString(R.string.start_up_ok); break;
-                case "up_flip": label = host.activity().getString(R.string.start_up_flip); break;
-                case "close": label = host.activity().getString(R.string.common_close); break;
-                default: label = host.activity().getString(R.string.common_recenter);
-            }
-            UiKit.button(c, r, label, b.hover, primary);
-        }
-
-        // live telemetry footer
-        c.drawText(host.activity().getString(R.string.start_tip1), 64f, 1000f, pTileSub);
-        UiKit.status(c, host.pipelineInfo(), 64f, 1060f);
-        UiKit.status(c, host.headAngles(), 64f, 1110f);
+        Panel.Button b = p.buttons.isEmpty() ? null : p.buttons.get(0);
+        boolean hover = b != null && b.hover;
+        RectF r = new RectF(10, 10, p.pw - 10, p.ph - 10);
+        Paint f = new Paint(Paint.ANTI_ALIAS_FLAG);
+        f.setColor(hover ? UiKit.CARD_HOVER : UiKit.CARD);
+        c.drawRoundRect(r, 30, 30, f);
+        Paint br = new Paint(Paint.ANTI_ALIAS_FLAG);
+        br.setStyle(Paint.Style.STROKE);
+        br.setStrokeWidth(4f);
+        br.setColor(hover ? UiKit.BORDER_HOVER : UiKit.BORDER);
+        c.drawRoundRect(r, 30, 30, br);
+        c.drawText(TILE_ICONS[idx], p.pw / 2f, 215f, pIcon);
+        c.drawText(labels[idx], p.pw / 2f, 345f, pTileLabel);
+        c.drawText(subs[idx], p.pw / 2f, 415f, pTileSub);
     }
 
     @Override public void draw(Canvas c, Panel p, boolean focused) { drawBody(c, p, focused); }
