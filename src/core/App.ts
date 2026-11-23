@@ -22,6 +22,9 @@ import { GameApp } from '../apps/GameApp';
 import { NotesApp } from '../apps/NotesApp';
 import { SettingsApp } from '../apps/SettingsApp';
 import { HelpApp } from '../apps/HelpApp';
+import { DiagnosticsApp } from '../apps/DiagnosticsApp';
+import { applyPerformanceMode } from './settings';
+import type { Diagnostics } from '../apps/types';
 
 const STAGE = { x: 0, y: 0.02, z: -2.05 };
 const DOCK = { x: 0, y: -0.63, z: -1.82, tilt: -0.26 };
@@ -55,6 +58,7 @@ export class App implements AppHost {
   private uiRefresh = 0;
   private lastRenderScale = settings.renderScale;
   private lastRotate = settings.handRotate;
+  private lastPixelRatio = settings.pixelRatio;
 
   private prevPinch = false;
   private externalClick = false;
@@ -68,6 +72,11 @@ export class App implements AppHost {
   private toastText: string | null = null;
   private toastUntil = 0;
   private stagePanelRef: Panel;
+  private renderMs = 0;
+  private lastError: string | null = null;
+  private modeForced = false;
+  private watchdog = 0;
+  private startedAt = 0;
 
   constructor(private canvas: HTMLCanvasElement, private hudCanvas: HTMLCanvasElement) {
     this.renderer = new StereoRenderer(canvas, settings);
@@ -114,6 +123,7 @@ export class App implements AppHost {
     this.current = this.apps.get('home')!;
     this.contentRoot.add(this.current.group);
 
+    this.installErrorHandlers();
     this.pointer.setPanels([this.stage, this.dock]);
     setThumbLoadListener(() => this.stage.markDirty());
     this.bindInput();
@@ -133,14 +143,17 @@ export class App implements AppHost {
     await this.requestFullscreen();
     void this.requestWakeLock();
 
+    this.startedAt = performance.now();
+    this.startWatchdog();
+
     if (mode === 'stereo') {
-      await this.headTracker.start();
-      // czekamy chwilę na pierwszy odczyt czujników
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      if (!this.headTracker.isLive) {
-        this.toast('Brak czujników ruchu — przełączam na tryb 2D.');
+      const ok = await this.headTracker.start();
+      if (!ok) {
         this.mode = 'flat';
+        this.toast(this.headTracker.error ?? 'Brak czujników ruchu — tryb 2D.', 5000);
       }
+      // NIE przełączamy od razu: czujniki często startują po 1–3 s.
+      // Watchdog niżej sam wróci do VR, gdy tylko pojawią się odczyty.
     }
 
     if (settings.handTracking && !this.hands.isRunning) {
@@ -155,6 +168,8 @@ export class App implements AppHost {
 
   async stop(): Promise<void> {
     this.running = false;
+    if (this.watchdog) window.clearInterval(this.watchdog);
+    this.watchdog = 0;
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     this.hands.stop();
@@ -232,8 +247,11 @@ export class App implements AppHost {
   applySettings(): void {
     saveSettings();
     this.renderer.applySettings();
-    if (Math.abs(settings.renderScale - this.lastRenderScale) > 0.001) {
+    const scaleChanged = Math.abs(settings.renderScale - this.lastRenderScale) > 0.001;
+    const pixelChanged = Math.abs(settings.pixelRatio - this.lastPixelRatio) > 0.001;
+    if (scaleChanged || pixelChanged) {
       this.lastRenderScale = settings.renderScale;
+      this.lastPixelRatio = settings.pixelRatio;
       this.renderer.resize();
     }
     if (settings.handRotate !== this.lastRotate) {
@@ -302,11 +320,110 @@ export class App implements AppHost {
     this.open(item.kind === 'video' ? 'cinema' : 'gallery');
   }
 
+  currentMode(): 'stereo' | 'flat' {
+    return this.mode;
+  }
+
+  /** Ręczne przełączenie trybu — wyłącza automatyczny watchdog. */
+  setMode(next: 'stereo' | 'flat'): void {
+    this.modeForced = true;
+    if (this.mode === next) return;
+    this.mode = next;
+    this.toast(next === 'stereo' ? 'Tryb VR: obraz stereo dla dwojga oczu.' : 'Tryb 2D: jeden obraz.', 3000);
+    this.stage.markDirty();
+    this.dock.markDirty();
+    if (next === 'stereo' && !this.headTracker.isLive) {
+      void this.headTracker.start();
+    }
+  }
+
+  performanceMode(): void {
+    applyPerformanceMode();
+    this.lastRenderScale = settings.renderScale;
+    this.lastRotate = settings.handRotate;
+    this.renderer.resize();
+    this.renderer.applySettings();
+    this.handVisuals.skeletonEnabled = settings.showSkeleton;
+    saveSettings();
+    this.stage.markDirty();
+    this.toast('Tryb płynności: niższa rozdzielczość, mniej efektów.', 3000);
+  }
+
+  diagnostics(): Diagnostics {
+    const buf = this.renderer.bufferSize;
+    return {
+      mode: this.mode,
+      fps: this.fpsAvg,
+      renderMs: this.renderMs,
+      renderScale: settings.renderScale,
+      pixelRatio: settings.pixelRatio,
+      buffer: { width: Math.round(buf.width), height: Math.round(buf.height) },
+      gpu: this.renderer.gpuInfo,
+      sensorsLive: this.headTracker.isLive,
+      sensorsAbsolute: this.headTracker.absolute,
+      camera: this.hands.status,
+      hands: this.hands.getHands().length,
+      handMs: this.hands.inferenceMs,
+      handHz: this.hands.measuredHz,
+      error: this.hands.error ?? this.lastError,
+      dpr: window.devicePixelRatio || 1,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      ua: navigator.userAgent,
+    };
+  }
+
+  /** Pilnuje czujników ruchu: nie wyłącza VR na stałe, tylko czeka i wraca. */
+  private startWatchdog(): void {
+    if (this.watchdog) window.clearInterval(this.watchdog);
+    this.watchdog = window.setInterval(() => {
+      if (!this.running || this.modeForced) return;
+      const live = this.headTracker.isLive;
+      const age = (performance.now() - this.startedAt) / 1000;
+      if (!live && this.mode === 'stereo' && age > 6) {
+        this.mode = 'flat';
+        this.toast('Brak czujników ruchu — tryb 2D. Wrócę do VR, gdy zadziałają.', 5000);
+      } else if (live && this.mode === 'flat') {
+        this.mode = 'stereo';
+        this.toast('Czujniki działają — wracam do VR.', 2500);
+      }
+    }, 1000);
+  }
+
+  /** Pokazuje błędy na wierzchu — bez tego „nie działa” jest nie do zdiagnozowania. */
+  private installErrorHandlers(): void {
+    const show = (message: string) => {
+      this.lastError = message.slice(0, 240);
+      let banner = document.getElementById('err-banner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'err-banner';
+        document.body.appendChild(banner);
+      }
+      banner.textContent = `VisionPocket — błąd: ${this.lastError}`;
+      banner.classList.add('show');
+      window.setTimeout(() => banner?.classList.remove('show'), 12000);
+    };
+    window.addEventListener('error', (event) => show(String(event.message ?? event.error ?? 'nieznany błąd')));
+    window.addEventListener('unhandledrejection', (event) => {
+      const reason = event.reason;
+      show(reason instanceof Error ? reason.message : String(reason));
+    });
+  }
+
   // ------------------------------------------------------------------- loop
 
   private loop = (): void => {
     if (!this.running) return;
     this.raf = requestAnimationFrame(this.loop);
+    try {
+      this.frame();
+    } catch (error) {
+      this.lastError = error instanceof Error ? error.message : String(error);
+      console.error(error);
+    }
+  };
+
+  private frame(): void {
 
     const now = performance.now();
     const dt = Math.min(0.1, Math.max(0.0001, (now - this.last) / 1000));
@@ -366,27 +483,58 @@ export class App implements AppHost {
     this.stage.flush(now);
     this.dock.flush(now);
 
-    this.scene.updateMatrixWorld();
+    const r0 = performance.now();
     this.renderer.render(this.mode, this.scene);
+    this.renderMs = this.renderMs * 0.85 + (performance.now() - r0) * 0.15;
 
     this.drawHud(update.dwell, hands, pinch);
-  };
+  }
 
-  private adjustQuality(dt: number): void {
-    if (this.mode !== 'stereo') return;
-    if (this.fpsAvg < 42) {
-      this.slowTime += 0.5;
-      if (this.slowTime > 4 && settings.renderScale > 0.58) {
-        settings.renderScale = Math.max(0.58, Number((settings.renderScale - 0.07).toFixed(2)));
-        this.lastRenderScale = settings.renderScale;
-        this.renderer.resize();
-        saveSettings();
-        this.slowTime = 0;
-        this.toast('Obniżam jakość, żeby utrzymać płynność.');
-      }
-    } else {
-      this.slowTime = Math.max(0, this.slowTime - dt);
+  /** Automatyczne schodzenie z jakością — po kolei, aż FPS wróci do normy. */
+  private adjustQuality(_dt: number): void {
+    if (!settings.adaptive) return;
+    if (this.fpsAvg >= 46) {
+      this.slowTime = Math.max(0, this.slowTime - 0.5);
+      return;
     }
+
+    this.slowTime += 0.5;
+    // reagujemy po ~1.5 s, nie po 4 s
+    if (this.slowTime < 1.5) return;
+    this.slowTime = 0;
+
+    if (settings.renderScale > 0.52) {
+      settings.renderScale = Math.max(0.52, Number((settings.renderScale - 0.08).toFixed(2)));
+      this.lastRenderScale = settings.renderScale;
+    this.lastPixelRatio = settings.pixelRatio;
+      this.renderer.resize();
+      saveSettings();
+      this.toast('Obniżam rozdzielczość, żeby utrzymać płynność.', 1800);
+      return;
+    }
+    if (settings.pixelRatio > 0.8) {
+      settings.pixelRatio = 0.8;
+      this.lastPixelRatio = 0.8;
+      this.renderer.resize();
+      this.toast('Niższa rozdzielczość ekranu (tryb płynności).', 1800);
+      return;
+    }
+    if (settings.chromatic) {
+      settings.chromatic = false;
+      this.renderer.applySettings();
+      return;
+    }
+    if (settings.showSkeleton) {
+      settings.showSkeleton = false;
+      this.handVisuals.skeletonEnabled = false;
+      return;
+    }
+    if (settings.handHz > 8) {
+      settings.handHz = 8;
+      this.toast('Rzadsza analiza dłoni (8×/s).', 1800);
+      return;
+    }
+    this.stage.markDirty();
   }
 
   private updateHead(dt: number): void {

@@ -1,16 +1,17 @@
 {
   "name": "visionpocket",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "VisionPocket \u2014 VR/MR w Twojej kieszeni: telefon + tani headset, sterowanie d\u0142o\u0144mi.",
+  "description": "VisionPocket — VR/MR w Twojej kieszeni: telefon + tani headset, sterowanie dłońmi.",
   "scripts": {
     "prepare:mp": "node scripts/copy-mediapipe.mjs",
     "dev": "npm run prepare:mp && vite --host 0.0.0.0",
     "build": "npm run prepare:mp && tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "smoke": "esbuild tools/smoke/harness.ts --bundle --platform=node --format=esm --outfile=tools/smoke/out.mjs --external:@napi-rs/canvas --log-level=warning && node tools/smoke/out.mjs"
+    "smoke": "esbuild tools/smoke/harness.ts --bundle --platform=node --format=esm --outfile=tools/smoke/out.mjs --external:@napi-rs/canvas --log-level=warning && node tools/smoke/out.mjs",
+    "screens": "node tools/smoke/screens.mjs"
   },
   "dependencies": {
     "@capacitor/camera": "^8.0.0",

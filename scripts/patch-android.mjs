@@ -68,6 +68,26 @@ if (!xml.includes('android:windowLayoutInDisplayCutoutMode')) {
 }
 
 writeFileSync(manifestPath, xml);
+
+// --- wersja aplikacji (żeby było widać, że to nowy build) ---
+const gradlePath = 'android/app/build.gradle';
+const VERSION_NAME = '0.2.0';
+const VERSION_CODE = '2';
+if (existsSync(gradlePath)) {
+  let gradle = readFileSync(gradlePath, 'utf8');
+  if (!/versionCode\s+\d+/.test(gradle)) {
+    gradle = gradle.replace(/defaultConfig\s*\{/, (m) => `${m}\n        versionCode ${VERSION_CODE}\n        versionName "${VERSION_NAME}"`);
+  } else {
+    gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${VERSION_CODE}`);
+    if (/versionName/.test(gradle)) {
+      gradle = gradle.replace(/versionName\s+"[^"]*"/, `versionName "${VERSION_NAME}"`);
+    } else {
+      gradle = gradle.replace(/versionCode\s+\d+/, (m) => `${m}\n        versionName "${VERSION_NAME}"`);
+    }
+  }
+  writeFileSync(gradlePath, gradle);
+  console.log(`[patch-android] versionName ${VERSION_NAME} (${VERSION_CODE})`);
+}
 console.log('[patch-android] Manifest zaktualizowany:');
 console.log(
   PERMISSIONS.map((p) => `  · ${p}`).join('\n'),

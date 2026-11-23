@@ -62,8 +62,7 @@ const FRAG = /* glsl */ `
     vec2 lp = luv * 2.0 - 1.0;
     float edge = length(lp);
     float vig = 1.0 - uVignette * pow(clamp(edge, 0.0, 1.0), 2.2);
-    float mask = 1.0 - smoothstep(0.985, 1.02, length(p * 0.86));
-    col *= vig * mask * uBrightness;
+    col *= vig * uBrightness;
 
     // linowe -> sRGB (renderer ma outputColorSpace = Linear)
     col = pow(max(col, vec3(0.0)), vec3(1.0 / 2.2));
@@ -100,6 +99,8 @@ export class StereoRenderer {
   private flatQuad!: THREE.Mesh;
   private width = 1;
   private height = 1;
+  private bufferWidth = 1;
+  private bufferHeight = 1;
 
   constructor(canvas: HTMLCanvasElement, private settings: Settings) {
     this.renderer = new THREE.WebGLRenderer({
@@ -172,13 +173,21 @@ export class StereoRenderer {
     const h = Math.max(2, Math.floor(window.innerHeight));
     this.width = w;
     this.height = h;
+
+    const pr = Math.min(2, Math.max(0.6, this.settings.pixelRatio || 1));
+    this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
     (this.renderer.domElement as HTMLCanvasElement).style.width = '100%';
     (this.renderer.domElement as HTMLCanvasElement).style.height = '100%';
 
+    const buf = new THREE.Vector2();
+    this.renderer.getDrawingBufferSize(buf);
+    this.bufferWidth = buf.x;
+    this.bufferHeight = buf.y;
+
     const scale = Math.min(1, Math.max(0.4, this.settings.renderScale));
-    const eyeW = Math.max(2, Math.floor((w / 2) * scale));
-    const eyeH = Math.max(2, Math.floor(h * scale));
+    const eyeW = Math.max(2, Math.floor((buf.x / 2) * scale));
+    const eyeH = Math.max(2, Math.floor(buf.y * scale));
 
     this.rtLeft?.dispose();
     this.rtRight?.dispose();
@@ -200,7 +209,7 @@ export class StereoRenderer {
     this.rtRight.texture.colorSpace = THREE.LinearSRGBColorSpace;
 
     this.rtFlat?.dispose();
-    this.rtFlat = new THREE.WebGLRenderTarget(Math.max(2, Math.floor(w * scale)), Math.max(2, Math.floor(h * scale)), {
+    this.rtFlat = new THREE.WebGLRenderTarget(Math.max(2, Math.floor(buf.x)), Math.max(2, Math.floor(buf.y)), {
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
       depthBuffer: true,
@@ -300,5 +309,21 @@ export class StereoRenderer {
 
   get size(): { width: number; height: number } {
     return { width: this.width, height: this.height };
+  }
+
+  /** Rzeczywisty rozmiar bufora (px) — do diagnostyki. */
+  get bufferSize(): { width: number; height: number } {
+    return { width: this.bufferWidth, height: this.bufferHeight };
+  }
+
+  get gpuInfo(): string {
+    try {
+      const gl = this.renderer.getContext();
+      const debug = gl.getExtension('WEBGL_debug_renderer_info');
+      if (debug) return String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)).slice(0, 60);
+      return String(gl.getParameter(gl.RENDERER)).slice(0, 60);
+    } catch {
+      return 'brak danych';
+    }
   }
 }

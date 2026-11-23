@@ -1,6 +1,6 @@
 import './styles.css';
 import { App } from './core/App';
-import { loadSettings } from './core/settings';
+import { applyPerformanceMode, loadSettings, resetSettings, settings } from './core/settings';
 import { mediaLibrary } from './core/media';
 import { sfx } from './core/sfx';
 import { initNative } from './native';
@@ -41,6 +41,28 @@ const camState = document.getElementById('cam-state');
 const filesInput = document.getElementById('files') as HTMLInputElement | null;
 const filesCount = document.getElementById('files-count');
 const deviceLine = document.getElementById('device-line');
+const perfBtn = document.getElementById('perf-toggle');
+const perfState = document.getElementById('perf-state');
+let perfMode = false;
+
+function paintPerf(): void {
+  if (!perfState) return;
+  perfMode = settings.renderScale <= 0.56 && settings.pixelRatio <= 0.9;
+  perfState.textContent = perfMode
+    ? 'włączony — 60 FPS, niższa ostrość'
+    : 'wyłączony — maksymalna jakość';
+}
+
+perfBtn?.addEventListener('click', () => {
+  if (perfMode) {
+    resetSettings();
+    perfMode = false;
+  } else {
+    applyPerformanceMode();
+  }
+  paintPerf();
+  if (perfBtn) perfBtn.classList.toggle('on', perfMode);
+});
 
 if (!canvas || !hudCanvas || !boot) {
   throw new Error('Brak elementów interfejsu.');
@@ -73,17 +95,57 @@ window.addEventListener('pointerdown', unlock);
 window.addEventListener('keydown', unlock);
 
 // --- przyciski startowe
-startVr?.addEventListener('click', () => {
+async function startApp(mode: 'stereo' | 'flat'): Promise<void> {
+  const btn = mode === 'stereo' ? startVr : startFlat;
+  btn?.setAttribute('disabled', 'true');
   sfx.unlock();
-  void app.start('stereo');
-  boot.classList.add('hide');
+  try {
+    await app.start(mode);
+    boot?.classList.add('hide');
+    try {
+      localStorage.setItem('vp.autostart', '1');
+      localStorage.setItem('vp.lastmode', mode);
+    } catch {
+      /* brak localStorage */
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    app.toast(`Nie udało się wystartować: ${message}`, 8000);
+    console.error(error);
+  } finally {
+    btn?.removeAttribute('disabled');
+  }
+}
+
+startVr?.addEventListener('click', () => void startApp('stereo'));
+startFlat?.addEventListener('click', () => void startApp('flat'));
+paintPerf();
+if (perfBtn) perfBtn.classList.toggle('on', perfMode);
+
+// --- dotknięcie gdziekolwiek poza przyciskami = wejście w VR
+// (w headsecie nie widać, gdzie kliknąć — każdy dotyk ma działać)
+boot.addEventListener('pointerdown', (event) => {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('button, label, input, a, .media-row, .steps')) return;
+  void startApp('stereo');
 });
 
-startFlat?.addEventListener('click', () => {
-  sfx.unlock();
-  void app.start('flat');
-  boot.classList.add('hide');
-});
+// --- szybki restart: po pierwszym udanym wejściu startujemy w VR sami
+let autoStart: number | undefined;
+try {
+  if (localStorage.getItem('vp.autostart') === '1') {
+    autoStart = window.setTimeout(() => {
+      if (!boot.classList.contains('hide')) void startApp('stereo');
+    }, 900);
+  }
+} catch {
+  /* brak localStorage */
+}
+const cancelAuto = () => {
+  if (autoStart) window.clearTimeout(autoStart);
+  autoStart = undefined;
+};
+boot.addEventListener('pointerdown', cancelAuto, { once: true });
 
 // --- kamera (prosimy o zgodę ZANIM telefon trafi do headsetu)
 camBtn?.addEventListener('click', async () => {
@@ -118,6 +180,9 @@ if (deviceLine) {
     `${secure ? 'HTTPS ✓' : 'brak HTTPS'}`,
   ];
   deviceLine.textContent = chunks.join(' · ');
+  if (!hasOrientation) {
+    deviceLine.textContent += ' — brak czujników ruchu oznacza brak VR';
+  }
 }
 
 // --- blokada zoomu / odświeżania gestami

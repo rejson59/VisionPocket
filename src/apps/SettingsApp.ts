@@ -157,41 +157,56 @@ export class SettingsApp implements VrApp {
       panel.hit(id, bx, 620, bw, 50);
     });
 
+    this.sliderRow(panel, COL_A.x, 668, COL_A.w, 'set:ostrosc', 'Ostrość (piksele)', settings.pixelRatio, 0.7, 2.5, (v) => `${v.toFixed(2)}×`);
+    this.sliderRow(panel, COL_B.x, 700, COL_B.w, 'set:handhz', 'Analiza dłoni', settings.handHz, 6, 24, (v) => `${Math.round(v)}×/s`);
+
     // --- dolny pasek ---
     const by = H - 150;
-    button(ctx, 40, by, 260, 74, 'Wyśrodkuj widok', {
-      hover: panel.hoverId === 'set:recenter',
-      accent: C.cyan,
-      size: 20,
-    });
-    panel.hit('set:recenter', 40, by, 260, 74);
-
-    button(ctx, 320, by, 220, 74, this.host.cameraRunning() ? 'Wyłącz kamerę' : 'Włącz kamerę', {
-      hover: panel.hoverId === 'set:camera',
-      accent: this.host.cameraRunning() ? C.red : C.lime,
-      size: 20,
-    });
-    panel.hit('set:camera', 320, by, 220, 74);
-
-    button(ctx, 560, by, 220, 74, 'Reset', {
-      hover: panel.hoverId === 'set:reset',
-      accent: C.amber,
-      size: 20,
-    });
-    panel.hit('set:reset', 560, by, 220, 74);
+    const mode = this.host.currentMode();
+    const buttons = [
+      { id: 'set:recenter', label: 'Wyśrodkuj', w: 200, accent: C.cyan },
+      {
+        id: 'set:camera',
+        label: this.host.cameraRunning() ? 'Wyłącz kamerę' : 'Włącz kamerę',
+        w: 210,
+        accent: this.host.cameraRunning() ? C.red : C.lime,
+      },
+      { id: 'set:reset', label: 'Reset', w: 140, accent: C.amber },
+      { id: 'set:diag', label: 'Diagnostyka', w: 210, accent: C.amber },
+      {
+        id: 'set:mode',
+        label: mode === 'stereo' ? 'Tryb: VR stereo' : 'Tryb: 2D',
+        w: 240,
+        accent: mode === 'stereo' ? C.violet : C.muted,
+      },
+    ];
+    let bx = 40;
+    for (const b of buttons) {
+      button(ctx, bx, by, b.w, 74, b.label, {
+        hover: panel.hoverId === b.id,
+        accent: b.accent,
+        size: 19,
+      });
+      panel.hit(b.id, bx, by, b.w, 74);
+      bx += b.w + 14;
+    }
 
     // status
     const hands = this.host.handCount();
     ctx.save();
     ctx.globalAlpha = 0.9;
-    icon(ctx, 'hand', W - 300, by + 38, 30, hands > 0 ? C.lime : C.muted);
-    text(ctx, hands > 0 ? `Dłonie widoczne: ${hands}` : 'Brak dłoni w kadrze', W - 275, by + 38, {
-      size: 18,
+    icon(ctx, 'hand', W - 330, by + 22, 26, hands > 0 ? C.lime : C.muted);
+    text(ctx, hands > 0 ? `Dłonie: ${hands}` : 'Brak dłoni', W - 308, by + 22, {
+      size: 17,
       color: hands > 0 ? C.lime : C.muted,
     });
-    text(ctx, `${Math.round(this.host.fps())} FPS · render ${Math.round(settings.renderScale * 100)}%`, W - 275, by + 70, {
-      size: 17,
+    text(ctx, `${Math.round(this.host.fps())} FPS · render ${Math.round(settings.renderScale * 100)}%`, W - 308, by + 52, {
+      size: 16,
       color: C.muted,
+    });
+    text(ctx, mode === 'stereo' ? 'VR: obraz dla obu oczu' : '2D: jeden obraz', W - 308, by + 78, {
+      size: 16,
+      color: mode === 'stereo' ? C.violet : C.muted,
     });
     ctx.restore();
 
@@ -274,6 +289,21 @@ export class SettingsApp implements VrApp {
         this.host.applySettings();
         this.panel.markDirty();
         this.host.toast('Ustawienia przywrócone.');
+        break;
+      case 'set:diag':
+        this.host.open('diagnostics');
+        break;
+      case 'set:mode':
+        this.host.setMode(this.host.currentMode() === 'stereo' ? 'flat' : 'stereo');
+        break;
+      case 'set:ostrosc':
+        settings.pixelRatio = Number(settings.pixelRatio.toFixed(2));
+        saveSettings();
+        this.host.applySettings();
+        break;
+      case 'set:handhz':
+        settings.handHz = Math.round(settings.handHz);
+        saveSettings();
         break;
       case 'set:home':
         this.host.back();

@@ -2,6 +2,26 @@ import type * as THREE from 'three';
 import type { Panel } from '../ui/Panel';
 import type { IconName } from '../ui/draw';
 
+export interface Diagnostics {
+  mode: 'stereo' | 'flat';
+  fps: number;
+  renderMs: number;
+  renderScale: number;
+  pixelRatio: number;
+  buffer: { width: number; height: number };
+  gpu: string;
+  sensorsLive: boolean;
+  sensorsAbsolute: boolean;
+  camera: string;
+  hands: number;
+  handMs: number;
+  handHz: number;
+  error: string | null;
+  dpr: number;
+  viewport: { width: number; height: number };
+  ua: string;
+}
+
 export interface AppHost {
   open(id: string): void;
   back(): void;
@@ -17,6 +37,12 @@ export interface AppHost {
   fps(): number;
   /** uruchamia pełnoekranowe wideo 360/2D — używane przez Kino i Galerię */
   openMedia(itemId: string): void;
+  /** ręczne przełączenie VR (stereo) / 2D */
+  setMode(mode: 'stereo' | 'flat'): void;
+  currentMode(): 'stereo' | 'flat';
+  diagnostics(): Diagnostics;
+  /** tryb ratunkowy: minimalna jakość, maksymalna płynność */
+  performanceMode(): void;
 }
 
 export interface VrApp {

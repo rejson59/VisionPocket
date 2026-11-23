@@ -42,7 +42,11 @@ function dist2(a: Landmark, b: Landmark): number {
 
 /**
  * Śledzenie dłoni z tylnej kamery telefonu (MediaPipe Hands, w pełni offline).
- * Telefon siedzi sztywno w headsecie, więc przestrzeń kamery == przestrzeń głowy.
+ *
+ * Wydajność: analiza obrazu NIE może iść 25×/s — na telefonie każda klatka
+ * MediaPipe blokuje główny wątek na ~20–40 ms (stąd spadki do ~24 FPS).
+ * Dlatego: adaptacyjne tempo (12 Hz gdy dłoń widoczna, 5 Hz gdy nie),
+ * mały bufor wejściowy i pomiar czasu wnioskowania.
  */
 export class HandTracker {
   status: 'idle' | 'loading' | 'running' | 'denied' | 'error' = 'idle';
@@ -50,8 +54,13 @@ export class HandTracker {
   video: HTMLVideoElement | null = null;
   stream: MediaStream | null = null;
   texture: THREE.VideoTexture | null = null;
-  /** ostatni znany FOV kamery (do debugowania) */
   rotate: 0 | 90 | 180 | 270 = 0;
+
+  /** statystyki do diagnostyki */
+  inferenceMs = 0;
+  measuredHz = 0;
+  inferenceCount = 0;
+  lastHandAt = 0;
 
   private hands: any = null;
   private detectCanvas: HTMLCanvasElement | null = null;
@@ -61,8 +70,10 @@ export class HandTracker {
   private frames = new Map<Handedness, HandFrame>();
   private previous = new Map<Handedness, THREE.Vector3[]>();
   private raf = 0;
-  private interval = 40;
   private loaded = false;
+  private hzWindowStart = 0;
+  private hzWindowCount = 0;
+  private static readonly INPUT_W = 256;
 
   constructor(private settings: Settings) {}
 
@@ -83,7 +94,10 @@ export class HandTracker {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.error = message;
-      this.status = message.includes('denied') || message.includes('NotAllowed') ? 'denied' : 'error';
+      this.status =
+        message.includes('denied') || message.includes('NotAllowed') || message.includes('Permission')
+          ? 'denied'
+          : 'error';
       this.stop();
     }
   }
@@ -119,10 +133,10 @@ export class HandTracker {
     texture.generateMipmaps = false;
     this.texture = texture;
 
-    const size = this.rotatedSize(320, 240);
+    const size = this.rotatedSize(HandTracker.INPUT_W, (HandTracker.INPUT_W * 3) / 4);
     const canvas = document.createElement('canvas');
-    canvas.width = size.w;
-    canvas.height = size.h;
+    canvas.width = Math.round(size.w);
+    canvas.height = Math.round(size.h);
     this.detectCanvas = canvas;
     this.detectCtx = canvas.getContext('2d', { alpha: false });
   }
@@ -155,23 +169,30 @@ export class HandTracker {
     const HandsCtor = (window as any).Hands;
     if (!HandsCtor) throw new Error('MediaPipe Hands niedostępne.');
 
-    this.hands = new HandsCtor({
-      locateFile: (file: string) => `${base}${file}`,
-    });
+    this.hands = new HandsCtor({ locateFile: (file: string) => `${base}${file}` });
     this.hands.setOptions({
       maxNumHands: 2,
       modelComplexity: 0,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.4,
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.45,
       selfieMode: false,
     });
     this.hands.onResults((results: MPResults) => this.onResults(results));
     this.loaded = true;
   }
 
+  /** Ile ms czekamy między klatkami analizy — zależnie od tego, czy widzimy dłoń. */
+  private get interval(): number {
+    const target = Math.min(30, Math.max(6, this.settings.handHz || 12));
+    const sinceHand = performance.now() - this.lastHandAt;
+    const effective = sinceHand < 700 ? target : Math.max(5, Math.min(8, target * 0.6));
+    return 1000 / effective;
+  }
+
   private loop = (): void => {
     this.raf = requestAnimationFrame(this.loop);
     if (this.status !== 'running' || this.busy || !this.hands || !this.video) return;
+    if (document.hidden) return;
     const now = performance.now();
     if (now - this.lastSend < this.interval) return;
     if (this.video.readyState < 2) return;
@@ -183,9 +204,19 @@ export class HandTracker {
       this.busy = false;
       return;
     }
+    const t0 = performance.now();
     Promise.resolve(this.hands.send({ image }))
       .catch(() => undefined)
       .finally(() => {
+        const ms = performance.now() - t0;
+        this.inferenceMs = this.inferenceMs * 0.8 + ms * 0.2;
+        this.inferenceCount++;
+        this.hzWindowCount++;
+        if (now - this.hzWindowStart > 1000) {
+          this.measuredHz = (this.hzWindowCount * 1000) / (now - this.hzWindowStart);
+          this.hzWindowStart = now;
+          this.hzWindowCount = 0;
+        }
         this.busy = false;
       });
   };
@@ -216,6 +247,8 @@ export class HandTracker {
     const landmarks = results.multiHandLandmarks ?? [];
     const handedness = results.multiHandedness ?? [];
 
+    if (landmarks.length > 0) this.lastHandAt = now;
+
     for (let i = 0; i < landmarks.length; i++) {
       const lm = landmarks[i];
       if (!lm || lm.length < 21) continue;
@@ -227,7 +260,6 @@ export class HandTracker {
       this.frames.set(label, frame);
     }
 
-    // wygaś dłonie, których nie ma w obrazie
     for (const [label, frame] of this.frames) {
       if (now - frame.updatedAt > 500) this.frames.delete(label);
       else if (!landmarks.length) frame.pinching = false;
@@ -255,7 +287,6 @@ export class HandTracker {
       points.push(new THREE.Vector3(x, y, z));
     }
 
-    // wygładzenie landmarków (redukuje drgania detekcji)
     const prev = this.previous.get(label);
     if (prev && prev.length === points.length) {
       for (let i = 0; i < points.length; i++) points[i].lerp(prev[i], 0.42);
@@ -298,9 +329,9 @@ export class HandTracker {
   setRotate(deg: 0 | 90 | 180 | 270): void {
     this.rotate = deg;
     if (this.detectCanvas) {
-      const size = this.rotatedSize(320, 240);
-      this.detectCanvas.width = size.w;
-      this.detectCanvas.height = size.h;
+      const size = this.rotatedSize(HandTracker.INPUT_W, (HandTracker.INPUT_W * 3) / 4);
+      this.detectCanvas.width = Math.round(size.w);
+      this.detectCanvas.height = Math.round(size.h);
     }
   }
 
@@ -316,6 +347,8 @@ export class HandTracker {
     this.video = null;
     this.frames.clear();
     this.previous.clear();
+    this.inferenceMs = 0;
+    this.measuredHz = 0;
     if (this.status === 'running') this.status = 'idle';
   }
 }

@@ -127,6 +127,7 @@ async function main(): Promise<void> {
   const { NotesApp } = await import('../../src/apps/NotesApp.ts');
   const { SettingsApp } = await import('../../src/apps/SettingsApp.ts');
   const { HelpApp } = await import('../../src/apps/HelpApp.ts');
+  const { DiagnosticsApp } = await import('../../src/apps/DiagnosticsApp.ts');
   const { PointerSystem } = await import('../../src/input/PointerSystem.ts');
   const { Hud } = await import('../../src/ui/Hud.ts');
   const THREE = await import('three');
@@ -148,6 +149,28 @@ async function main(): Promise<void> {
     requestFiles() {},
     fps: () => 58,
     openMedia() {},
+    setMode() {},
+    currentMode: () => 'stereo' as const,
+    performanceMode() {},
+    diagnostics: () => ({
+      mode: 'stereo' as const,
+      fps: 58,
+      renderMs: 7.4,
+      renderScale: 0.7,
+      pixelRatio: 1,
+      buffer: { width: 1200, height: 540 },
+      gpu: 'Adreno 740',
+      sensorsLive: true,
+      sensorsAbsolute: true,
+      camera: 'running',
+      hands: 1,
+      handMs: 14.2,
+      handHz: 12,
+      error: null,
+      dpr: 2.6,
+      viewport: { width: 1200, height: 540 },
+      ua: 'smoke-test',
+    }),
   };
 
   const panel = new Panel({ widthM: 1.72, heightM: 1.08, draw: () => {} });
@@ -161,6 +184,7 @@ async function main(): Promise<void> {
     ['Notes', new NotesApp(host, panel)],
     ['Settings', new SettingsApp(host, panel)],
     ['Help', new HelpApp(host, panel)],
+    ['Diagnostics', new DiagnosticsApp(host, panel)],
   ] as const;
 
   for (const [name, app] of apps) {

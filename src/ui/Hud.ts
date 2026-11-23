@@ -19,6 +19,8 @@ export interface HudState {
 export class Hud {
   private ctx: CanvasRenderingContext2D;
   private dpr = 1;
+  private lastKey = '';
+  private lastDraw = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d');
@@ -28,7 +30,8 @@ export class Hud {
   }
 
   resize(): void {
-    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    // HUD to nakładka wektorowa — 1.5× wystarczy, a oszczędza GPU
+    this.dpr = Math.min(1.5, window.devicePixelRatio || 1);
     this.canvas.width = Math.floor(window.innerWidth * this.dpr);
     this.canvas.height = Math.floor(window.innerHeight * this.dpr);
     this.canvas.style.width = '100%';
@@ -36,6 +39,21 @@ export class Hud {
   }
 
   draw(s: HudState): void {
+    const now = performance.now();
+    const key = [
+      s.mode,
+      Math.round(s.dwell * 24),
+      s.handCount,
+      s.pinching ? 1 : 0,
+      Math.round(s.fps / 5),
+      s.hint ?? '',
+      s.toast ?? '',
+      s.tracking ? 1 : 0,
+    ].join('|');
+    if (key === this.lastKey || now - this.lastDraw < 33) return;
+    this.lastKey = key;
+    this.lastDraw = now;
+
     const ctx = this.ctx;
     const w = this.canvas.width;
     const h = this.canvas.height;
