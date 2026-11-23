@@ -10,3 +10,6 @@ android/local.properties
 android/.idea
 *.apk
 .vercel
+
+tools/smoke/shots
+tools/smoke/out.mjs

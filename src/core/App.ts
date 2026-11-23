@@ -11,6 +11,7 @@ import { C, alpha } from '../ui/theme';
 import { icon, pill, rrPath, text } from '../ui/draw';
 import { settings, saveSettings } from './settings';
 import { mediaLibrary } from './media';
+import { setThumbLoadListener } from './thumbs';
 import { sfx } from './sfx';
 import { APP_LIST } from '../apps/registry';
 import type { AppHost, VrApp } from '../apps/types';
@@ -51,6 +52,7 @@ export class App implements AppHost {
   private frames = 0;
   private fpsTimer = 0;
   private slowTime = 0;
+  private uiRefresh = 0;
   private lastRenderScale = settings.renderScale;
   private lastRotate = settings.handRotate;
 
@@ -113,6 +115,7 @@ export class App implements AppHost {
     this.contentRoot.add(this.current.group);
 
     this.pointer.setPanels([this.stage, this.dock]);
+    setThumbLoadListener(() => this.stage.markDirty());
     this.bindInput();
     this.renderer.applySettings();
     this.environment.setPassthrough(settings.passthrough, this.hands.texture);
@@ -309,6 +312,12 @@ export class App implements AppHost {
     const dt = Math.min(0.1, Math.max(0.0001, (now - this.last) / 1000));
     this.last = now;
     this.elapsed += dt;
+
+    this.uiRefresh += dt;
+    if (this.uiRefresh > 10) {
+      this.uiRefresh = 0;
+      this.stage.markDirty();
+    }
 
     this.frames++;
     this.fpsTimer += dt;

@@ -62,7 +62,7 @@ const FRAG = /* glsl */ `
     vec2 lp = luv * 2.0 - 1.0;
     float edge = length(lp);
     float vig = 1.0 - uVignette * pow(clamp(edge, 0.0, 1.0), 2.2);
-    float mask = smoothstep(1.02, 0.985, length(p * 0.86));
+    float mask = 1.0 - smoothstep(0.985, 1.02, length(p * 0.86));
     col *= vig * mask * uBrightness;
 
     // linowe -> sRGB (renderer ma outputColorSpace = Linear)
