@@ -454,9 +454,15 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
         // each eye viewport is literally half the physical screen, so the
         // cardboard view is correct by construction. FBO + barrel distortion
         // is used only when the user sets distortion > 0.
-        boolean useFbo = settings.distortionPct() > 0;
-        int tgtW = useFbo ? fboW : scrW;
-        int tgtH = useFbo ? fboH : scrH;
+        // v3.5: the legacy FBO + barrel-distortion path is PERMANENTLY OFF.
+        // A non-zero Zniekształcenie setting (persisted from earlier releases)
+        // silently routed ALL rendering through that half-maintained path,
+        // which is why recent fixes never reached the display. There is now
+        // exactly ONE rendering path (direct), so geometry bugs cannot hide
+        // behind a second implementation.
+        final boolean useFbo = false;
+        int tgtW = scrW;
+        int tgtH = scrH;
         boolean st = stacked;   // FBO keeps the surface's shape, so same layout
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, useFbo ? fbo : 0);
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
@@ -2100,7 +2106,7 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
             ver = activity.getPackageManager()
                     .getPackageInfo(activity.getPackageName(), 0).versionName;
         } catch (Exception ignored) {}
-        return "v" + ver + " · dist " + settings.distortionPct() + "%"
+        return "v" + ver + " · direct"
                 + " · IPD " + settings.ipd() + "mm"
                 + " · viewRot " + settings.viewRot()
                 + " · surf " + scrW + "x" + scrH + (stacked ? "·S" : "·L")
