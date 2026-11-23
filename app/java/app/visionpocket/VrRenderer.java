@@ -1973,11 +1973,14 @@ public class VrRenderer implements GLSurfaceView.Renderer, VpWindows.WmHost,
     @Override public void pickSrt() { activity.runOnUiThread(() -> activity.pickSrt()); }
 
     @Override public String pipelineInfo() {
-        return "scr " + scrW + "x" + scrH + " · eye " + eyeW + "x" + eyeH
-                + " · fbo " + fboW + "x" + fboH
+        String ver = "";
+        try {
+            ver = activity.getPackageManager()
+                    .getPackageInfo(activity.getPackageName(), 0).versionName;
+        } catch (Exception ignored) {}
+        return "v" + ver + " · fbo " + fboW + "x" + fboH
                 + " · dist " + settings.distortionPct() + "%"
                 + " · IPD " + settings.ipd() + "mm"
-                + " · env " + settings.envMode() + " · rot " + settings.rotDeg()
                 + " · viewRot " + settings.viewRot()
                 + " · mount " + (head.mountCalibrated() ? "ok" : "raw")
                 + " · " + Math.round(fps) + " fps";

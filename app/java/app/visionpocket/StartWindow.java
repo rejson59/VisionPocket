@@ -33,6 +33,7 @@ public class StartWindow implements WindowContent {
     private final Paint pAccent = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pAccentHover = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pPrimary = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pStatus = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     public StartWindow(VpWindows wm, VpWindows.WmHost host) {
         this.wm = wm;
@@ -88,6 +89,9 @@ public class StartWindow implements WindowContent {
         pPrimary.setColor(0xFF101216);
         pPrimary.setTextSize(46f);
         pPrimary.setTextAlign(Paint.Align.CENTER);
+        pStatus.setColor(0xFF7E838E);
+        pStatus.setTextSize(30f);
+        pStatus.setTextAlign(Paint.Align.LEFT);
 
         wm.placeNew(window);
     }
@@ -148,6 +152,7 @@ public class StartWindow implements WindowContent {
             }
         }
         c.drawText(host.activity().getString(R.string.start_tip1), 62f, 920f, pText);
+        c.drawText(host.pipelineInfo(), 62f, 1000f, pStatus);
     }
 
     @Override public void draw(Canvas c, Panel p, boolean focused) { drawBody(c, p, focused); }
