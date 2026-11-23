@@ -134,8 +134,9 @@ boot.addEventListener('pointerdown', (event) => {
 let autoStart: number | undefined;
 try {
   if (localStorage.getItem('vp.autostart') === '1') {
+    const lastMode = localStorage.getItem('vp.lastmode') === 'flat' ? 'flat' : 'stereo';
     autoStart = window.setTimeout(() => {
-      if (!boot.classList.contains('hide')) void startApp('stereo');
+      if (!boot.classList.contains('hide')) void startApp(lastMode);
     }, 900);
   }
 } catch {

@@ -113,7 +113,8 @@ export class HandTracker {
         facingMode: { ideal: 'environment' },
         width: { ideal: 640 },
         height: { ideal: 480 },
-        frameRate: { ideal: 30, max: 30 },
+        // 20 fps wystarczy analizie dłoni i mocno ogranicza grzanie telefonu
+        frameRate: { ideal: 20, max: 24 },
       },
     });
     this.stream = stream;
