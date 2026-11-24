@@ -71,7 +71,7 @@ export const DEFAULT_SETTINGS: Settings = {
   handTracking: true,
   handHz: 12,
   showSkeleton: true,
-  passthrough: false,
+  passthrough: true,
   handRotate: 0,
   dwell: 1.15,
   cameraFov: 62,

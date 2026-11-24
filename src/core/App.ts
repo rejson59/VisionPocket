@@ -88,6 +88,8 @@ export class App implements AppHost {
     this.scene.add(this.contentRoot);
     this.scene.add(this.headSpace);
     this.headSpace.add(this.handVisuals.group);
+    // obraz z kamery musi być przyklejony do głowy, nie do świata
+    this.headSpace.add(this.environment.passthroughGroup);
 
     // panel sceny
     this.stage = new Panel({
@@ -128,7 +130,7 @@ export class App implements AppHost {
     setThumbLoadListener(() => this.stage.markDirty());
     this.bindInput();
     this.renderer.applySettings();
-    this.environment.setPassthrough(settings.passthrough, this.hands.texture);
+    this.environment.setPassthrough(settings.passthrough, this.hands.texture, settings.cameraFov, settings.handRotate);
     this.handVisuals.skeletonEnabled = settings.showSkeleton;
   }
 
@@ -154,9 +156,18 @@ export class App implements AppHost {
       }
       // NIE przełączamy od razu: czujniki często startują po 1–3 s.
       // Watchdog niżej sam wróci do VR, gdy tylko pojawią się odczyty.
+
+      // Wyśrodkowanie po 2,5 s: wtedy telefon jest już w headsecie i patrzysz
+      // prosto — panele trafiają dokładnie przed oczy (inaczej „nic nie widać”).
+      window.setTimeout(() => {
+        if (this.running && this.headTracker.isLive) {
+          this.headTracker.recenter();
+          this.toast('Widok wyśrodkowany.', 2000);
+        }
+      }, 2500);
     }
 
-    if (settings.handTracking && !this.hands.isRunning) {
+    if ((settings.handTracking || settings.passthrough) && !this.hands.isRunning) {
       void this.startCamera();
     }
 
@@ -258,7 +269,7 @@ export class App implements AppHost {
       this.lastRotate = settings.handRotate;
       this.hands.setRotate(settings.handRotate);
     }
-    this.environment.setPassthrough(settings.passthrough, this.hands.texture);
+    this.environment.setPassthrough(settings.passthrough, this.hands.texture, settings.cameraFov, settings.handRotate);
     this.handVisuals.skeletonEnabled = settings.showSkeleton;
     this.stage.markDirty();
     this.dock.markDirty();
@@ -269,7 +280,7 @@ export class App implements AppHost {
     if (on && !this.hands.isRunning) {
       await this.startCamera();
     }
-    this.environment.setPassthrough(on, this.hands.texture);
+    this.environment.setPassthrough(on, this.hands.texture, settings.cameraFov, settings.handRotate);
     saveSettings();
     this.toast(on ? 'Tryb MR: widzisz otoczenie z kamery.' : 'Tryb VR: pełne otoczenie.');
   }
@@ -282,8 +293,8 @@ export class App implements AppHost {
     if (this.hands.isRunning) return;
     await this.hands.start();
     if (this.hands.status === 'running') {
-      this.environment.setPassthrough(settings.passthrough, this.hands.texture);
-      this.toast('Kamera gotowa — pokaż dłoń przed sobą.');
+      this.environment.setPassthrough(settings.passthrough, this.hands.texture, settings.cameraFov, settings.handRotate);
+      this.toast(settings.passthrough ? 'MR gotowe — widzisz otoczenie z kamery.' : 'Kamera gotowa — pokaż dłoń przed sobą.');
     } else {
       this.toast(this.hands.error ?? 'Nie udało się uruchomić kamery.');
       sfx.error();
@@ -292,7 +303,7 @@ export class App implements AppHost {
 
   stopCamera(): void {
     this.hands.stop();
-    this.environment.setPassthrough(false, null);
+    this.environment.setPassthrough(false, null, settings.cameraFov, settings.handRotate);
     this.toast('Kamera wyłączona.');
   }
 

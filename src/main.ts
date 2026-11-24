@@ -1,6 +1,6 @@
 import './styles.css';
 import { App } from './core/App';
-import { applyPerformanceMode, loadSettings, resetSettings, settings } from './core/settings';
+import { applyPerformanceMode, loadSettings, resetSettings, saveSettings, settings } from './core/settings';
 import { mediaLibrary } from './core/media';
 import { sfx } from './core/sfx';
 import { initNative } from './native';
@@ -52,6 +52,23 @@ function paintPerf(): void {
     ? 'włączony — 60 FPS, niższa ostrość'
     : 'wyłączony — maksymalna jakość';
 }
+
+const mrBtn = document.getElementById('mr-toggle');
+const mrState = document.getElementById('mr-state');
+
+function paintMr(): void {
+  if (!mrState) return;
+  mrState.textContent = settings.passthrough
+    ? 'włączony — widzisz swój pokój + panele'
+    : 'wyłączony — pełne wirtualne otoczenie';
+  mrBtn?.classList.toggle('on', settings.passthrough);
+}
+
+mrBtn?.addEventListener('click', () => {
+  settings.passthrough = !settings.passthrough;
+  saveSettings();
+  paintMr();
+});
 
 perfBtn?.addEventListener('click', () => {
   if (perfMode) {
@@ -121,6 +138,7 @@ startVr?.addEventListener('click', () => void startApp('stereo'));
 startFlat?.addEventListener('click', () => void startApp('flat'));
 paintPerf();
 if (perfBtn) perfBtn.classList.toggle('on', perfMode);
+paintMr();
 
 // --- dotknięcie gdziekolwiek poza przyciskami = wejście w VR
 // (w headsecie nie widać, gdzie kliknąć — każdy dotyk ma działać)

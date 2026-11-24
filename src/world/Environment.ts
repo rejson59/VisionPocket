@@ -61,9 +61,17 @@ export class Environment {
   readonly dome: THREE.Mesh;
   readonly particles: THREE.Points;
   private gridMat: THREE.ShaderMaterial;
-  private passthrough: THREE.Mesh;
-  private passthroughMat: THREE.MeshBasicMaterial;
   private particlesBase: Float32Array;
+  /** Obraz z kamery — trzymany w przestrzeni głowy (zawsze przed twarzą). */
+  readonly passthroughGroup = new THREE.Group();
+  private ptMain: THREE.Mesh;
+  private ptHalo: THREE.Mesh;
+  private ptMainMat: THREE.MeshBasicMaterial;
+  private ptHaloMat: THREE.MeshBasicMaterial;
+  private clutter: THREE.Object3D[] = [];
+  private camFov = 62;
+  private ptRotate: 0 | 90 | 180 | 270 = 0;
+  private lastVideoKey = '';
 
   constructor() {
     // kopuła
@@ -153,29 +161,101 @@ export class Environment {
       this.group.add(glow);
     }
 
-    // sfera do trybu MR (obraz z kamery)
-    this.passthroughMat = new THREE.MeshBasicMaterial({
+    // --- MR: obraz z kamery ---
+    // Kamera telefonu ma ~62° pola widzenia, a ekran VR ~92°. Rozciągnięcie
+    // zdjęcia na całą sferę dawało „rybie oko” i psuło cały efekt.
+    // Dlatego: ostry obraz 1:1 w polu widzenia kamery + przyciemnione,
+    // rozmyte obrzeże, żeby nie było widocznej krawędzi prostokąta.
+    this.ptMainMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
-      side: THREE.BackSide,
       depthWrite: false,
+      depthTest: false,
       toneMapped: false,
       fog: false,
     });
-    this.passthrough = new THREE.Mesh(new THREE.SphereGeometry(60, 40, 24), this.passthroughMat);
-    this.passthrough.visible = false;
-    this.group.add(this.passthrough);
+    this.ptHaloMat = new THREE.MeshBasicMaterial({
+      map: null,
+      color: 0x2b3346,
+      depthWrite: false,
+      depthTest: false,
+      toneMapped: false,
+      fog: false,
+    });
+
+    this.ptHalo = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.ptHaloMat);
+    this.ptHalo.renderOrder = -31;
+    this.ptHalo.frustumCulled = false;
+    this.ptMain = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.ptMainMat);
+    this.ptMain.renderOrder = -30;
+    this.ptMain.frustumCulled = false;
+
+    this.passthroughGroup.add(this.ptHalo, this.ptMain);
+    this.passthroughGroup.visible = false;
+
+    // co chowamy w MR, żeby nie pływało po prawdziwym pokoju
+    this.clutter = [this.dome, floor, this.particles, ...this.group.children.filter((o) => o !== this.dome && o !== floor && o !== this.particles)];
   }
 
-  setPassthrough(enabled: boolean, texture: THREE.Texture | null): void {
-    if (texture && this.passthroughMat.map !== texture) {
-      this.passthroughMat.map = texture;
-      this.passthroughMat.needsUpdate = true;
+  setPassthrough(
+    enabled: boolean,
+    texture: THREE.Texture | null,
+    camFovDeg?: number,
+    rotate: 0 | 90 | 180 | 270 = 0,
+  ): void {
+    if (typeof camFovDeg === 'number') this.camFov = camFovDeg;
+    if (rotate !== this.ptRotate) {
+      this.ptRotate = rotate;
+      this.lastVideoKey = '';
     }
-    this.dome.visible = !enabled;
-    this.passthrough.visible = enabled && !!texture;
+
+    if (texture) {
+      if (this.ptMainMat.map !== texture) {
+        this.ptMainMat.map = texture;
+        this.ptMainMat.needsUpdate = true;
+      }
+      if (this.ptHaloMat.map !== texture) {
+        this.ptHaloMat.map = texture;
+        this.ptHaloMat.needsUpdate = true;
+      }
+    }
+
+    const active = enabled && !!this.ptMainMat.map;
+    this.passthroughGroup.visible = active;
+    for (const obj of this.clutter) obj.visible = !active;
+    if (!active) this.dome.visible = true;
+    this.layoutPassthrough();
+  }
+
+  /** Ustawia rozmiar obrazu z kamery tak, by zgadzał się z jej polem widzenia. */
+  private layoutPassthrough(): void {
+    if (!this.passthroughGroup.visible) return;
+    const image = this.ptMainMat.map?.image as HTMLVideoElement | undefined;
+    const vw = image?.videoWidth ?? 0;
+    const vh = image?.videoHeight ?? 0;
+    if (!vw || !vh) return;
+
+    const key = `${vw}x${vh}:${this.camFov}:${this.ptRotate}`;
+    if (key === this.lastVideoKey) return;
+    this.lastVideoKey = key;
+
+    const sideways = this.ptRotate === 90 || this.ptRotate === 270;
+    const d = 1.6;
+    const hV = 2 * d * Math.tan(THREE.MathUtils.degToRad(this.camFov) / 2);
+    const wV = hV * (sideways ? vh / vw : vw / vh);
+
+    this.ptMain.position.set(0, 0, -d);
+    this.ptMain.scale.set(wV, hV, 1);
+    this.ptMain.rotation.z = -THREE.MathUtils.degToRad(this.ptRotate);
+    this.ptHalo.rotation.z = this.ptMain.rotation.z;
+
+    // obrzeże: ten sam obraz, większy i przyciemniony — udaje kątem oka
+    const k = 2.9;
+    this.ptHalo.position.set(0, 0, -d - 0.06);
+    this.ptHalo.scale.set(wV * k, hV * k, 1);
   }
 
   update(dt: number, t: number): void {
+    if (this.passthroughGroup.visible) this.layoutPassthrough();
     this.gridMat.uniforms.uTime.value = t;
     this.particles.rotation.y += dt * 0.02;
     const arr = this.particles.geometry.getAttribute('position') as THREE.BufferAttribute;

@@ -3,8 +3,26 @@
 **VR i MR w Twojej kieszeni.** Telefon w tanim headsecie (Cardboard) + śledzenie dłoni z kamery.
 Bez kontrolerów, bez gogli za 2500 zł, bez instalowania czegokolwiek na komputerze.
 
-> Wersja 0.2 — wirtualny dom, kino 360°, galeria, gra, notatki, ustawienia optyki, pełne
-> sterowanie dłońmi i **panel diagnostyki wydajności** (FPS, czujniki, kamera).
+> Wersja 0.3 — wirtualny dom, kino 360°, galeria, gra, notatki, ustawienia optyki, pełne
+> sterowanie dłońmi, **panel diagnostyki wydajności** i **Mixed Reality**: panele wiszą
+> w Twoim prawdziwym pokoju (obraz z kamery jako tło, jak passthrough w Queście).
+
+## Co nowego w 0.3 — Mixed Reality
+
+Do tej pory „MR” rozciągał obraz z kamery na **całą sferę 360°**, więc wychodziło rybie oko
+i krawędzie pokoju uciekały za plecy — stąd wrażenie „dziwne, nie jak Quest”.
+
+Teraz obraz z kamery jest renderowany **uczciwie**:
+
+- płaszczyzna dokładnie w polu widzenia kamery (~62°), bez rozciągania i bez rybiego oka,
+- obrzeża wypełnia przyciemniona, rozmyta kopia obrazu — nie ma widocznej krawędzi prostokąta,
+- w MR znikają wirtualna kopuła, siatka podłogi, cząsteczki i neonowe słupy — zostaje
+  **prawdziwy pokój + panele**, które wiszą w powietrzu i nie ruszają się, gdy kręcisz głową,
+- przy starcie widok jest **automatycznie wyśrodkowany** po 2,5 s (telefon jest już w headsecie),
+- MR włączasz na ekranie startowym („Mixed Reality”) albo w Ustawieniach.
+
+Czego MR z telefonu **nie zrobi** (uczciwie): brak głębi — wirtualny panel nie schowa się za
+prawdziwym krzesłem, a dłoń nie zasłoni panelu. Quest 3 ma do tego dedykowane kamery głębi.
 
 ## Co nowego w 0.2 (naprawa „24 FPS i to nie VR”)
 
@@ -72,6 +90,8 @@ To nie jest „Quest 3 za 100 zł” — to **inna klasa sprzętu, ale ta sama k
 - **Dłonie widzi tylko kamera** (ok. 70° kadru) — gdy wyjdziesz ręką z kadru, kursor znika.
 - **Ręce w VR nie są śledzone tak precyzyjnie jak w Queście** — dlatego mamy asystę (szczypanie
   z tolerancją, „dwell”, powiększone przyciski).
+- **MR to obraz z jednej kamery** — bez głębi: brak zasłaniania paneli przez prawdziwe
+  przedmioty i przez Twoją dłoń. Do tego potrzebny jest headset z otworem na kamerę.
 - **Brak passthrough MR bez otworu na kamerę** w headsecie.
 - **Cień / brakujące piksele przy mocnej korekcji soczewek** — kompromis fizyki.
 
