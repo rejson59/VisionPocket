@@ -74,7 +74,7 @@ export const DEFAULT_SETTINGS: Settings = {
   passthrough: true,
   handRotate: 0,
   dwell: 1.15,
-  cameraFov: 62,
+  cameraFov: 55,
   handDepthK: 0.075,
   showFps: true,
 };

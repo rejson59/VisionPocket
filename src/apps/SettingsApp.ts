@@ -111,11 +111,12 @@ export class SettingsApp implements VrApp {
 
     // --- kolumna A: optyka ---
     text(ctx, 'OPTYKA', COL_A.x, 158, { size: 16, weight: 700, color: C.amber });
-    this.sliderRow(panel, COL_A.x, 208, COL_A.w, 'set:ipd', 'Rozstaw oczu (IPD)', settings.ipd * 1000, 54, 76, (v) => `${Math.round(v)} mm`);
-    this.sliderRow(panel, COL_A.x, 300, COL_A.w, 'set:fov', 'Pole widzenia', settings.fov, 70, 110, (v) => `${Math.round(v)}°`);
-    this.sliderRow(panel, COL_A.x, 392, COL_A.w, 'set:lens', 'Korekcja soczewek', settings.lens, 0, 0.35, (v) => v.toFixed(2));
-    this.sliderRow(panel, COL_A.x, 484, COL_A.w, 'set:zoom', 'Dopasowanie obrazu', settings.zoom, 0.8, 1.3, (v) => `${v.toFixed(2)}×`);
-    this.sliderRow(panel, COL_A.x, 576, COL_A.w, 'set:brightness', 'Jasność', settings.brightness, 0.6, 1.7, (v) => `${Math.round(v * 100)}%`);
+    this.sliderRow(panel, COL_A.x, 206, COL_A.w, 'set:ipd', 'Rozstaw oczu (IPD)', settings.ipd * 1000, 54, 76, (v) => `${Math.round(v)} mm`);
+    this.sliderRow(panel, COL_A.x, 292, COL_A.w, 'set:fov', 'Pole widzenia', settings.fov, 70, 110, (v) => `${Math.round(v)}°`);
+    this.sliderRow(panel, COL_A.x, 378, COL_A.w, 'set:lens', 'Korekcja soczewek', settings.lens, 0, 0.35, (v) => v.toFixed(2));
+    this.sliderRow(panel, COL_A.x, 464, COL_A.w, 'set:zoom', 'Dopasowanie obrazu', settings.zoom, 0.8, 1.3, (v) => `${v.toFixed(2)}×`);
+    this.sliderRow(panel, COL_A.x, 550, COL_A.w, 'set:brightness', 'Jasność', settings.brightness, 0.6, 1.7, (v) => `${Math.round(v * 100)}%`);
+    this.sliderRow(panel, COL_A.x, 636, COL_A.w, 'set:camfov', 'Pole widzenia kamery (MR)', settings.cameraFov, 40, 80, (v) => `${Math.round(v)}°`);
 
     // --- kolumna B: wydajność i dłonie ---
     text(ctx, 'WYDAJNOŚĆ I DŁONIE', COL_B.x, 158, { size: 16, weight: 700, color: C.amber });
@@ -157,7 +158,7 @@ export class SettingsApp implements VrApp {
       panel.hit(id, bx, 620, bw, 50);
     });
 
-    this.sliderRow(panel, COL_A.x, 668, COL_A.w, 'set:ostrosc', 'Ostrość (piksele)', settings.pixelRatio, 0.7, 2.5, (v) => `${v.toFixed(2)}×`);
+    this.sliderRow(panel, COL_A.x, 722, COL_A.w, 'set:ostrosc', 'Ostrość (piksele)', settings.pixelRatio, 0.7, 2.5, (v) => `${v.toFixed(2)}×`);
     this.sliderRow(panel, COL_B.x, 700, COL_B.w, 'set:handhz', 'Analiza dłoni', settings.handHz, 6, 24, (v) => `${Math.round(v)}×/s`);
 
     // --- dolny pasek ---
@@ -298,6 +299,11 @@ export class SettingsApp implements VrApp {
         break;
       case 'set:ostrosc':
         settings.pixelRatio = Number(settings.pixelRatio.toFixed(2));
+        saveSettings();
+        this.host.applySettings();
+        break;
+      case 'set:camfov':
+        settings.cameraFov = Math.round(settings.cameraFov);
         saveSettings();
         this.host.applySettings();
         break;
